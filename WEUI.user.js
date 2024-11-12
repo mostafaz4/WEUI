@@ -1,9 +1,10 @@
 // ==UserScript==
-// @name         we mimic elnet
-// @namespace    http://tampermonkey.net/
+// @name         WEUI
 // @version      2024-05-29
-// @description  try to take over the world!
-// @author       You
+// @namespace    https://github.com/mostafaz4/WEUI/
+// @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
+// @description  Better WE.eg userinterface
+// @author       Bondok
 // @match        https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1?*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @grant        none
