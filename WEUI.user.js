@@ -1,16 +1,26 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2024-05-29
+// @version      2024-11-12.1
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
-// @description  Better WE.eg userinterface
+// @description  Better WE.eg user interface
 // @author       Bondok
 // @match        https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1?*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @grant        none
 // ==/UserScript==
 
+// prevent original page loading
 window.stop();
+
+//#region parameters
+
+maxHistory = 35;
+maxHistoryMobile = 4;
+
+//#endregion
+
+//#region write page html
 (function(){
     document.write(`
 
@@ -292,45 +302,24 @@ window.stop();
 
 `)
 }())
+//#endregion
 
+// capture exceptions to be displayed on phones by alerts
 window.onerror = function (error, url, line) { alert(line + ": " + error); };
 
 serviceNumber = new URLSearchParams(window.location.search).get("serviceNumber")
 password = new URLSearchParams(window.location.search).get("password");
-
-maxHistory = 35;
-maxHistoryMobile = 4;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 generatedToken = "";
 loginToken = "";
 log = false;
+lastLoginTime = new Date(0)
+deviceid = generateRandomHexString(16)
+cachedLocalStorage = {...localStorage}
 
 var loginObj, usageObj, balanceObj;
 
-function consoleLog(obj) {
-    if (!log) return
-    console.log(obj)
-}
-
+function consoleLog(obj) { if (!log) return; console.log(obj); }
 function generateRandomHexString(length){ return [...Array(length)].map(() => Math.floor(Math.random() * 16).toString(16)).join('') }
-
-lastLoginTime = new Date(0)
-deviceid = generateRandomHexString(16)
 
 function prepare_xhr(xhr) {
     xhr.withCredentials = true;
@@ -405,13 +394,6 @@ function GetBalance() {
         RefreshInfo();
     };
 }
-
-
-
-
-
-
-
 
 
 
@@ -543,9 +525,9 @@ function createInfoFor(package, index) {
 function LogUsage(package, print){
 
     let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
-    if (localStorage.getItem(savedLogName) == null) localStorage.setItem(savedLogName, JSON.stringify([]));
+    if (cachedLocalStorage[savedLogName] === undefined) localStorage.setItem(savedLogName, JSON.stringify([]));
 
-    var history = JSON.parse(localStorage.getItem(savedLogName));
+    var history = JSON.parse(cachedLocalStorage[savedLogName]);
     if (history == null) return
 
     if (history.length > 0){
@@ -641,11 +623,11 @@ function PrintUsageHistory(package){
         style: "position: absolute; top: 10px;",
         className: "usageHistoryTable"
     }));
-    if (localStorage.getItem(savedLogName) == null) {localStorage.setItem(savedLogName, JSON.stringify([])); }
-    for (let [index, usageDom] of JSON.parse(localStorage.getItem(savedLogName)).entries()) {
+    if (cachedLocalStorage[savedLogName] == null) {localStorage.setItem(savedLogName, JSON.stringify([])); }
+    for (let [index, usageDom] of JSON.parse(cachedLocalStorage[savedLogName]).entries()) {
         let usageNumDom = "";
         if (index > 0){
-            let usageNum = usageDom.key - JSON.parse(localStorage.getItem(savedLogName))[index - 1].key;
+            let usageNum = usageDom.key - JSON.parse(cachedLocalStorage[savedLogName])[index - 1].key;
             usageNumDom = usageNum.toFixed(2) + " GB";
             if (usageNum < 0) { usageNumDom = "<span style=\"color: lightgreen;\">" + Math.abs(usageNum).toFixed(2) + " GB</span>"; }
         }
