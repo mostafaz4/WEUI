@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2024-11-12.1
+// @version      2024-11-12.2
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -318,6 +318,7 @@ cachedLocalStorage = {...localStorage}
 
 var loginObj, usageObj, balanceObj;
 
+function localStorage_setItem (key, string) { localStorage.setItem(key, string); cachedLocalStorage[key] = string; }
 function consoleLog(obj) { if (!log) return; console.log(obj); }
 function generateRandomHexString(length){ return [...Array(length)].map(() => Math.floor(Math.random() * 16).toString(16)).join('') }
 
@@ -525,7 +526,7 @@ function createInfoFor(package, index) {
 function LogUsage(package, print){
 
     let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
-    if (cachedLocalStorage[savedLogName] === undefined) localStorage.setItem(savedLogName, JSON.stringify([]));
+    if (cachedLocalStorage[savedLogName] === undefined) localStorage_setItem(savedLogName, JSON.stringify([]));
 
     var history = JSON.parse(cachedLocalStorage[savedLogName]);
     if (history == null) return
@@ -540,7 +541,7 @@ function LogUsage(package, print){
     }
 
     history.push({ key: package.usedAmount, value: nowFormatedDateTime })
-    localStorage.setItem(savedLogName, JSON.stringify(history));
+    localStorage_setItem(savedLogName, JSON.stringify(history));
 
     if (!print) return
     PrintUsageHistory(package)
@@ -623,7 +624,7 @@ function PrintUsageHistory(package){
         style: "position: absolute; top: 10px;",
         className: "usageHistoryTable"
     }));
-    if (cachedLocalStorage[savedLogName] == null) {localStorage.setItem(savedLogName, JSON.stringify([])); }
+    if (cachedLocalStorage[savedLogName] === undefined) {localStorage_setItem(savedLogName, JSON.stringify([])); }
     for (let [index, usageDom] of JSON.parse(cachedLocalStorage[savedLogName]).entries()) {
         let usageNumDom = "";
         if (index > 0){
