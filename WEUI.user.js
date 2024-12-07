@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2024-11-12.2
+// @version      2024-12-07.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -336,6 +336,8 @@ function prepare_xhr(xhr) {
     xhr.setRequestHeader('Content-Type', "application/json")
     xhr.setRequestHeader('Accept-Encoding', "gzip")
     xhr.setRequestHeader('User-Agent', "okhttp/3.12.12")
+    xhr.setRequestHeader('clienttype', "google")
+    xhr.setRequestHeader('appversionno', "102")
 }
 
 function Login() {
