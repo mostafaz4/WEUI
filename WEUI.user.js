@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2024-12-10.0
+// @version      2024-12-10.1
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -43,7 +43,6 @@ maxHistoryMobile = 4;
   * {
     color: white;
     font-family: arial, sans-serif;
-    text-size-adjust: none;
   }
 
   .usageHistoryTable * {
