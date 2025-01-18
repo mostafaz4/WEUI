@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2024-12-10.1
+// @version      2025-01-18.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -317,11 +317,22 @@ lastLoginTime = new Date(0)
 deviceid = generateRandomHexString(16)
 cachedLocalStorage = {...localStorage}
 
-var loginObj, usageObj, balanceObj;
+var loginObj, usageObj, balanceObj, appVersionNo;
 
 function localStorage_setItem (key, string) { localStorage.setItem(key, string); cachedLocalStorage[key] = string; }
 function consoleLog(obj) { if (!log) return; console.log(obj); }
 function generateRandomHexString(length){ return [...Array(length)].map(() => Math.floor(Math.random() * 16).toString(16)).join('') }
+
+function getLatestAppVersionNumber() {
+  xhr_versionNo = new XMLHttpRequest();
+  xhr_versionNo.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/cms/getCzAppVersionList');
+  xhr_versionNo.setRequestHeader('Content-Type', "application/json")
+  xhr_versionNo.send(`{"versionType":"P","versionStatus":"R","appType":"Selfcare","osType":"google"}`);
+  xhr_versionNo.onload = function (event) {
+    appVersionNo = JSON.parse(xhr_versionNo.response).body[0].versionNo
+  };
+}
+getLatestAppVersionNumber()
 
 function prepare_xhr(xhr) {
     xhr.withCredentials = true;
@@ -338,7 +349,7 @@ function prepare_xhr(xhr) {
     xhr.setRequestHeader('Accept-Encoding', "gzip")
     xhr.setRequestHeader('User-Agent', "okhttp/3.12.12")
     xhr.setRequestHeader('clienttype', "google")
-    xhr.setRequestHeader('appversionno', "102")
+    xhr.setRequestHeader('appversionno', appVersionNo)
 }
 
 function Login() {
