@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-01-18.0
+// @version      2025-01-20.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -310,6 +310,7 @@ window.onerror = function (error, url, line) { alert(line + ": " + error); };
 
 serviceNumber = new URLSearchParams(window.location.search).get("serviceNumber")
 password = new URLSearchParams(window.location.search).get("password");
+
 generatedToken = "";
 loginToken = "";
 log = false;
@@ -319,7 +320,7 @@ cachedLocalStorage = {...localStorage}
 
 var loginObj, usageObj, balanceObj, appVersionNo;
 
-function localStorage_setItem (key, string) { localStorage.setItem(key, string); cachedLocalStorage[key] = string; }
+function localStorage_setItem(key, string) { localStorage.setItem(key, string); cachedLocalStorage[key] = string; }
 function consoleLog(obj) { if (!log) return; console.log(obj); }
 function generateRandomHexString(length){ return [...Array(length)].map(() => Math.floor(Math.random() * 16).toString(16)).join('') }
 
@@ -335,292 +336,294 @@ function getLatestAppVersionNumber() {
 getLatestAppVersionNumber()
 
 function prepare_xhr(xhr) {
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('accept', "application/json, text/plain, */*")
-    xhr.setRequestHeader('csrftoken', loginObj?.body?.token ?? "")
-    xhr.setRequestHeader('languagecode', "en-US")
-    xhr.setRequestHeader('ismobile', "true")
-    xhr.setRequestHeader('iscoporate', "false")
-    xhr.setRequestHeader('isselfcare', "true")
-    xhr.setRequestHeader('channelid', "704")
-    xhr.setRequestHeader('delegatorsubsid', "")
-    xhr.setRequestHeader('deviceid', deviceid)
-    xhr.setRequestHeader('Content-Type', "application/json")
-    xhr.setRequestHeader('Accept-Encoding', "gzip")
-    xhr.setRequestHeader('User-Agent', "okhttp/3.12.12")
-    xhr.setRequestHeader('clienttype', "google")
-    xhr.setRequestHeader('appversionno', appVersionNo)
+  xhr.withCredentials = true;
+  xhr.setRequestHeader('accept', "application/json, text/plain, */*")
+  xhr.setRequestHeader('csrftoken', loginObj?.body?.token ?? "")
+  xhr.setRequestHeader('languagecode', "en-US")
+  xhr.setRequestHeader('ismobile', "true")
+  xhr.setRequestHeader('iscoporate', "false")
+  xhr.setRequestHeader('isselfcare', "true")
+  xhr.setRequestHeader('channelid', "704")
+  xhr.setRequestHeader('delegatorsubsid', "")
+  xhr.setRequestHeader('deviceid', deviceid)
+  xhr.setRequestHeader('Content-Type', "application/json")
+  xhr.setRequestHeader('Accept-Encoding', "gzip")
+  xhr.setRequestHeader('User-Agent', "okhttp/3.12.12")
+  xhr.setRequestHeader('clienttype', "google")
+  xhr.setRequestHeader('appversionno', appVersionNo)
 }
 
 function Login() {
-    lastLoginTime = new Date();
-    xhr_login = new XMLHttpRequest();
-    xhr_login.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/auth/userAuthenticate');
-    prepare_xhr(xhr_login)
+  lastLoginTime = new Date();
+  xhr_login = new XMLHttpRequest();
+  xhr_login.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/auth/userAuthenticate');
+  prepare_xhr(xhr_login)
 
-    xhr_login.send(`{"acctId":"FBB${serviceNumber.replace(/^0+/, '')}","password":"${password}","appLocale":"en-US","isSelfcare":"Y","isMobile":"Y"}`);
+  xhr_login.send(`{"acctId":"FBB${serviceNumber.replace(/^0+/, '')}","password":"${password}","appLocale":"en-US","isSelfcare":"Y","isMobile":"Y"}`);
 
-    xhr_login.onload = function () {
-        if (xhr_login.response.includes('"retCode":"0"')) {
-            loginObj = JSON.parse(xhr_login.response);
-            consoleLog(loginObj);
-            GetUsage();
-        } else {
-            console.log(xhr_login.response);
-            document.getElementById("error").innerHTML = "Error login!!";
-            consoleLog("Error loggining in!!");
-        }
-    };
+  xhr_login.onload = function () {
+    if (xhr_login.response.includes('"retCode":"0"')) {
+      loginObj = JSON.parse(xhr_login.response);
+      consoleLog(loginObj);
+      GetUsage();
+    } else {
+      console.log(xhr_login.response);
+      document.getElementById("error").innerHTML = "Error login!!";
+      consoleLog("Error loggining in!!");
+    }
+  };
 }
 
 function GetUsage() {
-    xhr_usage = new XMLHttpRequest();
-    xhr_usage.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/cbs/bb/queryFreeUnit');
-    prepare_xhr(xhr_usage)
+  xhr_usage = new XMLHttpRequest();
+  xhr_usage.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/cbs/bb/queryFreeUnit');
+  prepare_xhr(xhr_usage)
 
-    xhr_usage.send(`{"subscriberId":"${loginObj.body.subscriber.subscriberId}"}`);
+  xhr_usage.send(`{"subscriberId":"${loginObj.body.subscriber.subscriberId}"}`);
 
-    xhr_usage.onload = function () {
-        //console.log("GetUsage json: " + xhr_usage.response);
-        document.getElementById("rawUsageResponse").innerHTML = "<PRE>" + JSON.stringify(JSON.parse(xhr_usage.response), null, 4) + "</PRE>";
-        usageObj = JSON.parse(xhr_usage.response);
-        consoleLog(usageObj);
-        //console.log(JSON.stringify(xhr_usage.response));
-        GetBalance();
+  xhr_usage.onload = function () {
+    //console.log("GetUsage json: " + xhr_usage.response);
+    document.getElementById("rawUsageResponse").innerHTML = "<PRE>" + JSON.stringify(JSON.parse(xhr_usage.response), null, 4) + "</PRE>";
+    usageObj = JSON.parse(xhr_usage.response);
+    consoleLog(usageObj);
+    //console.log(JSON.stringify(xhr_usage.response));
+    GetBalance();
 
-        RefreshInfo();
-    };
+    RefreshInfo();
+  };
 }
 
 function GetBalance() {
-    xhr_balance = new XMLHttpRequest();
-    xhr_balance.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cbs/ar/queryBalance');
-    prepare_xhr(xhr_balance)
+  xhr_balance = new XMLHttpRequest();
+  xhr_balance.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cbs/ar/queryBalance');
+  prepare_xhr(xhr_balance)
 
-    xhr_balance.send(`{"acctId":"${loginObj.body.account.acctId}"}`);
+  xhr_balance.send(`{"acctId":"${loginObj.body.account.acctId}"}`);
 
-    xhr_balance.onload = function () {
-        //console.log("GetBalance json: " + xhr_balance.response);
-        document.getElementById("rawBalanceResponse").innerHTML = "<PRE>" + JSON.stringify(JSON.parse(xhr_balance.response), null, 4) + "</PRE>";
-        balanceObj = JSON.parse(xhr_balance.response);
-        consoleLog(usageObj);
-        //console.log(JSON.stringify(xhr_balance.response));
+  xhr_balance.onload = function () {
+    //console.log("GetBalance json: " + xhr_balance.response);
+    document.getElementById("rawBalanceResponse").innerHTML = "<PRE>" + JSON.stringify(JSON.parse(xhr_balance.response), null, 4) + "</PRE>";
+    balanceObj = JSON.parse(xhr_balance.response);
+    consoleLog(usageObj);
+    //console.log(JSON.stringify(xhr_balance.response));
 
-        RefreshInfo();
-    };
+    RefreshInfo();
+  };
 }
 
 
 
 
 
-function formatedDate(){
-    const now = new Date();
-    const time = now.toLocaleString('en-eg', { hour: "2-digit", minute: "2-digit", hour12: true })
-    const date = now.toLocaleString('en-uk', { day: "2-digit", month: "short" })
-    return `${date} — ${time}`;
+function formatedDate() {
+  const now = new Date();
+  const time = now.toLocaleString('en-eg', { hour: "2-digit", minute: "2-digit", hour12: true })
+  const date = now.toLocaleString('en-uk', { day: "2-digit", month: "short" })
+  return `${date} ${time}`;
 };
 
 function SmartGetUsage() {
-    nowFormatedDateTime = formatedDate()
-    window.lastRefresh.innerText = "Generated: " + nowFormatedDateTime;
+  nowFormatedDateTime = formatedDate()
+  window.lastRefresh.innerText = "Generated: " + nowFormatedDateTime;
 
-    usageObj, balanceObj = undefined;
+  usageObj, balanceObj = undefined;
 
-    //if (((new Date - lastLoginTime) / 1000 / 60) > 15)
-    Login();
+  //if (((new Date - lastLoginTime) / 1000 / 60) > 15)
+  Login();
 }
 
 function msToTime(duration, leading_zero = false) {
-    let minutes = Math.floor((duration / (1000 * 60)) % 60)
-    let hours   = Math.floor((duration / (1000 * 60 * 60)) % 24);
-    if (leading_zero) {
-        hours = hours < 10 ? `0${hours}` : hours;
-        minutes = minutes < 10 ? `0${minutes}` : minutes;
-    }
-    return `${hours}h ${minutes}m`;
+  let minutes = Math.floor((duration / (1000 * 60)) % 60)
+  let hours   = Math.floor((duration / (1000 * 60 * 60)) % 24);
+  if (leading_zero) {
+    hours = hours < 10 ? `0${hours}` : hours;
+    minutes = minutes < 10 ? `0${minutes}` : minutes;
+  }
+  return `${hours}h ${minutes}m`;
 }
 
-function ForDoms(selector, action) {
-    Array.from(document.querySelectorAll(selector)).forEach(action);
-}
+function diffToDaysAhead(days) { return new Date(new Date().setHours((days * 24), 0, 0)) - new Date() }
+
+function ForDoms(selector, action) {  Array.from(document.querySelectorAll(selector)).forEach(action); }
 
 function refreshOverAll() {
-    document.getElementById("overAll").style.display = "block";
-    sumInitial = 0;
-    sumUsed = 0;
-    usageObj.body[0].freeUnitBeanDetailList.forEach(x => {
-        sumInitial += x.initialAmount;
-        sumUsed += x.usedAmount
-    });
-    sumUsagePercentage = ((sumUsed / sumInitial) * 100).toFixed(2)
+  document.getElementById("overAll").style.display = "block";
+  sumInitial = 0;
+  sumUsed = 0;
+  usageObj.body[0].freeUnitBeanDetailList.forEach(x => {
+    sumInitial += x.initialAmount;
+    sumUsed += x.usedAmount
+  });
+  sumUsagePercentage = ((sumUsed / sumInitial) * 100).toFixed(2)
 
-    ForDoms(".freeUnitEnName_overAll", el => { el.style.display = "block"; });
-    ForDoms(".pbExtraWrapper_overAll", el => { el.style.display = "flow-root"; });
+  ForDoms(".freeUnitEnName_overAll", el => { el.style.display = "block"; });
+  ForDoms(".pbExtraWrapper_overAll", el => { el.style.display = "flow-root"; });
 
-    ForDoms(".initialTotalAmount_overAll", el => { el.innerText = sumInitial; });
-    ForDoms(".measureUnitEnName_overAll", el => { el.innerText = unitEnIds[C_TED_Primary_Fixed_Data.measureUnit]; });
-    ForDoms(".usedAmount_overAll", el => { el.innerText = sumUsed.toFixed(2); });
-    ForDoms(".freeAmount_overAll", el => { el.innerText = (sumInitial - sumUsed.toFixed(2)).toFixed(2); });
-    ForDoms(".usagePercentage_overAll", el => { el.innerText = sumUsagePercentage; });
+  ForDoms(".initialTotalAmount_overAll", el => { el.innerText = sumInitial; });
+  ForDoms(".measureUnitEnName_overAll", el => { el.innerText = unitEnIds[C_TED_Primary_Fixed_Data.measureUnit]; });
+  ForDoms(".usedAmount_overAll", el => { el.innerText = sumUsed.toFixed(2); });
+  ForDoms(".freeAmount_overAll", el => { el.innerText = (sumInitial - sumUsed.toFixed(2)).toFixed(2); });
+  ForDoms(".usagePercentage_overAll", el => { el.innerText = sumUsagePercentage; });
 
-    document.getElementById("progressbar_overAll").style.width = sumUsagePercentage + "%";
-    document.getElementById("progressbarValue_overAll").innerText = sumUsagePercentage + "%";
-    document.getElementById("progressbarValue_overAll").style.left = "calc(" + sumUsagePercentage + "% - 21px)";
+  document.getElementById("progressbar_overAll").style.width = sumUsagePercentage + "%";
+  document.getElementById("progressbarValue_overAll").innerText = sumUsagePercentage + "%";
+  document.getElementById("progressbarValue_overAll").style.left = "calc(" + sumUsagePercentage + "% - 21px)";
 
-    usageObj.body[0].freeUnitBeanDetailList.forEach(x => {
+  usageObj.body[0].freeUnitBeanDetailList.forEach(x => {
 
-        dnewInfo = new Date(new Date(x.expireTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
-        doldInfo = new Date(new Date(x.effectiveTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
-        dnowInfo = new Date().getTime();
-        dpercentInfo = (dnowInfo - doldInfo) / (dnewInfo - doldInfo) * 100;
+    dnewInfo = new Date(new Date(x.expireTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
+    doldInfo = new Date(new Date(x.effectiveTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
+    dnowInfo = new Date().getTime();
+    dpercentInfo = (dnowInfo - doldInfo) / (dnewInfo - doldInfo) * 100;
 
-        document.querySelector(".pbExtraWrapper_overAll > div").appendChild(Object.assign(document.createElement('span'),{
-            innerHTML: `${dpercentInfo.toFixed(2)}%`,
-            style: `left: calc(${dpercentInfo.toFixed(2)}% - 21px);`,
-            className: "tip"
-        }));
+    document.querySelector(".pbExtraWrapper_overAll > div").appendChild(Object.assign(document.createElement('span'),{
+      innerHTML: `${dpercentInfo.toFixed(2)}%`,
+      style: `left: calc(${dpercentInfo.toFixed(2)}% - 21px);`,
+      className: "tip"
+    }));
 
-        document.querySelector(".pbExtraWrapper_overAll > div").appendChild(Object.assign(document.createElement('div'),{
-            innerHTML: `&nbsp;`,
-            style: `width: ${dpercentInfo.toFixed(2)}%; background-color: rgb(163 204 85 / 25%); position: absolute; transition: 0.5s; float: left; height: 3px; margin-top: 37px;`
-        }));
+    document.querySelector(".pbExtraWrapper_overAll > div").appendChild(Object.assign(document.createElement('div'),{
+      innerHTML: `&nbsp;`,
+      style: `width: ${dpercentInfo.toFixed(2)}%; background-color: rgb(163 204 85 / 25%); position: absolute; transition: 0.5s; float: left; height: 3px; margin-top: 37px;`
+    }));
 
-    });
+  });
 }
 
 unitEnIds = {1106: "B", 1107: "KB", 1108: "MB", 1109: "GB"}
 
 function createInfoFor(package, index) {
-    if (package.itemCode == "C_TED_Primary_Fixed_Data" || document.getElementsByClassName("freeUnitEnName_" + package.itemCode + "_" + index).length > 0) return;
+  if (
+    package.itemCode == "C_TED_Primary_Fixed_Data" ||
+    document.getElementsByClassName("freeUnitEnName_" + package.itemCode + "_" + index).length > 0
+  ) return;
 
-    package.usedAmount = package.initialAmount - package.currentAmount
-    package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
+  package.usedAmount = package.initialAmount - package.currentAmount
+  package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
 
-    sampleHTML = document.getElementById("infoSpecimen").innerHTML;
-    sampleHTML = sampleHTML.replace(/{packageName}/g, "_" + package.itemCode + "_" + index);
-    nwInfo = document.createElement("div");
-    nwInfo.id = "div_" + package.itemCode;
-    nwInfo.className = "transition";
-    nwInfo.innerHTML = sampleHTML;
-    document.getElementById("infoSpecimen").parentNode.insertBefore(nwInfo, document.getElementById("infoSpecimen"));
+  sampleHTML = document.getElementById("infoSpecimen").innerHTML;
+  sampleHTML = sampleHTML.replace(/{packageName}/g, "_" + package.itemCode + "_" + index);
+  nwInfo = document.createElement("div");
+  nwInfo.id = "div_" + package.itemCode;
+  nwInfo.className = "transition";
+  nwInfo.innerHTML = sampleHTML;
+  document.getElementById("infoSpecimen").parentNode.insertBefore(nwInfo, document.getElementById("infoSpecimen"));
 
-    ForDoms("#div_" + package.itemCode, el => { el.style.cursor = "pointer"; el.setAttribute("onclick", "toggleMerge(this)"); el.setAttribute("itemCode", package.itemCode); el.setAttribute("index", index); });
+  ForDoms("#div_" + package.itemCode, el => { el.style.cursor = "pointer"; el.setAttribute("onclick", "toggleMerge(this)"); el.setAttribute("itemCode", package.itemCode); el.setAttribute("index", index); });
 
-    ForDoms(".freeUnitEnName_" + package.itemCode + "_" + index, el => { el.style.display = "block"; });
-    ForDoms(".pbExtraWrapper_" + package.itemCode + "_" + index, el => { el.style.display = "flow-root"; });
+  ForDoms(".freeUnitEnName_" + package.itemCode + "_" + index, el => { el.style.display = "block"; });
+  ForDoms(".pbExtraWrapper_" + package.itemCode + "_" + index, el => { el.style.display = "flow-root"; });
 
-    ForDoms(".freeUnitEnName_" + package.itemCode + "_" + index, el => { el.innerText = package.offeringName || package.itemCode; });
-    ForDoms(".initialTotalAmount_" + package.itemCode + "_" + index, el => { el.innerText = package.initialAmount; });
-    ForDoms(".measureUnitEnName_" + package.itemCode + "_" + index, el => { el.innerText = unitEnIds[package.measureUnit]; });
-    ForDoms(".usedAmount_" + package.itemCode + "_" + index, el => { el.innerText = package.usedAmount.toFixed(2); });
-    ForDoms(".usagePercentage_" + package.itemCode + "_" + index, el => { el.innerText = package.usagePercentage; });
-    ForDoms(".freeAmount_" + package.itemCode + "_" + index, el => { el.innerText = package.currentAmount; });
-    ForDoms(".remainingDaysForRenewal_" + package.itemCode + "_" + index, el => { el.innerText =
-        package.remainingDaysForRenewal + "d " + msToTime(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + package.remainingDaysForRenewal + 1, 0, 0, 0) - new Date());
-                                                                                });
+  ForDoms(".freeUnitEnName_" + package.itemCode + "_" + index, el => { el.innerText = package.offeringName || package.itemCode; });
+  ForDoms(".initialTotalAmount_" + package.itemCode + "_" + index, el => { el.innerText = package.initialAmount; });
+  ForDoms(".measureUnitEnName_" + package.itemCode + "_" + index, el => { el.innerText = unitEnIds[package.measureUnit]; });
+  ForDoms(".usedAmount_" + package.itemCode + "_" + index, el => { el.innerText = package.usedAmount.toFixed(2); });
+  ForDoms(".usagePercentage_" + package.itemCode + "_" + index, el => { el.innerText = package.usagePercentage; });
+  ForDoms(".freeAmount_" + package.itemCode + "_" + index, el => { el.innerText = package.currentAmount; });
+  ForDoms(".remainingDaysForRenewal_" + package.itemCode + "_" + index, el => {
+    el.innerText = package.remainingDaysForRenewal + "d " + msToTime(diffToDaysAhead(package.remainingDaysForRenewal + 1));
+  });
 
-    document.getElementById("progressbar_" + package.itemCode + "_" + index).style.width = package.usagePercentage + "%";
-    document.getElementById("progressbarValue_" + package.itemCode + "_" + index).innerText = package.usagePercentage + "%";
-    document.getElementById("progressbarValue_" + package.itemCode + "_" + index).style.left = "calc(" + package.usagePercentage + "% - 21px)";
+  document.getElementById("progressbar_" + package.itemCode + "_" + index).style.width = package.usagePercentage + "%";
+  document.getElementById("progressbarValue_" + package.itemCode + "_" + index).innerText = package.usagePercentage + "%";
+  document.getElementById("progressbarValue_" + package.itemCode + "_" + index).style.left = "calc(" + package.usagePercentage + "% - 21px)";
 
-    dnewInfo = new Date(new Date(package.expireTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
-    doldInfo = new Date(new Date(package.effectiveTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
-    dnowInfo = new Date().getTime();
-    dpercentInfo = (dnowInfo - doldInfo) / (dnewInfo - doldInfo) * 100;
+  dnewInfo = new Date(new Date(package.expireTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
+  doldInfo = new Date(new Date(package.effectiveTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
+  dnowInfo = new Date().getTime();
+  dpercentInfo = (dnowInfo - doldInfo) / (dnewInfo - doldInfo) * 100;
 
-    document.getElementById("progressbarDate_" + package.itemCode + "_" + index).style.width = dpercentInfo + "%";
-    document.getElementById("progressbarDateValue_" + package.itemCode + "_" + index).innerText = dpercentInfo.toFixed(2) + "%";
-    document.getElementById("progressbarDateValue_" + package.itemCode + "_" + index).style.left = "calc(" + dpercentInfo.toFixed(2) + "% - 21px)";
+  document.getElementById("progressbarDate_" + package.itemCode + "_" + index).style.width = dpercentInfo + "%";
+  document.getElementById("progressbarDateValue_" + package.itemCode + "_" + index).innerText = dpercentInfo.toFixed(2) + "%";
+  document.getElementById("progressbarDateValue_" + package.itemCode + "_" + index).style.left = "calc(" + dpercentInfo.toFixed(2) + "% - 21px)";
 
-    LogUsage(package)
-    refreshOverAll()
+  LogUsage(package)
+  refreshOverAll()
 }
 
 function LogUsage(package, print){
+  let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
+  if (cachedLocalStorage[savedLogName] === undefined) localStorage_setItem(savedLogName, JSON.stringify([]));
 
-    let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
-    if (cachedLocalStorage[savedLogName] === undefined) localStorage_setItem(savedLogName, JSON.stringify([]));
+  var history = JSON.parse(cachedLocalStorage[savedLogName]);
+  if (history == null) return
 
-    var history = JSON.parse(cachedLocalStorage[savedLogName]);
-    if (history == null) return
+  if (history.length > 0){
+      if (history[history.length - 1].key != package.usedAmount) {
+          if (history.length >= maxHistory && history.length > 0)
+              history.shift();
+      } else {
+          return
+      }
+  }
 
-    if (history.length > 0){
-        if (history[history.length - 1].key != package.usedAmount) {
-            if (history.length >= maxHistory && history.length > 0)
-                history.shift();
-        } else {
-            return
-        }
-    }
+  history.push({ key: package.usedAmount, value: nowFormatedDateTime })
+  localStorage_setItem(savedLogName, JSON.stringify(history));
 
-    history.push({ key: package.usedAmount, value: nowFormatedDateTime })
-    localStorage_setItem(savedLogName, JSON.stringify(history));
-
-    if (!print) return
-    PrintUsageHistory(package)
+  if (!print) return
+  PrintUsageHistory(package)
 }
 
 function RefreshInfo() {
 
-    C_TED_Primary_Fixed_Data = usageObj.body[0].freeUnitBeanDetailList.find(x => x.itemCode == "C_TED_Primary_Fixed_Data")
-    // repopulating old api properties for easier migration
-    C_TED_Primary_Fixed_Data.usedAmount = C_TED_Primary_Fixed_Data.initialAmount - C_TED_Primary_Fixed_Data.currentAmount
-    C_TED_Primary_Fixed_Data.usagePercentage = ((C_TED_Primary_Fixed_Data.usedAmount / C_TED_Primary_Fixed_Data.initialAmount) * 100).toFixed()
+  C_TED_Primary_Fixed_Data = usageObj.body[0].freeUnitBeanDetailList.find(x => x.itemCode == "C_TED_Primary_Fixed_Data")
+  // repopulating old api properties for easier migration
+  C_TED_Primary_Fixed_Data.usedAmount = C_TED_Primary_Fixed_Data.initialAmount - C_TED_Primary_Fixed_Data.currentAmount
+  C_TED_Primary_Fixed_Data.usagePercentage = ((C_TED_Primary_Fixed_Data.usedAmount / C_TED_Primary_Fixed_Data.initialAmount) * 100).toFixed()
 
-    if (C_TED_Primary_Fixed_Data == undefined) {
-        ForDoms(".freeUnitEnName", el => { el.innerHTML = "<h3>No Active Internet Bundle</h3>"; document.querySelector("#info").className = "nobundleView"; });
-        ForDoms("#balance", el => { el.innerText = "💰 " + (balanceObj == undefined ? "loading..." : (balanceObj.body.balanceInfo[0].totalAmount / 10000).toFixed(2)) + " EGP" });
-        return;
-    }
-
-    dnew = new Date(new Date(C_TED_Primary_Fixed_Data.expireTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
-    dold = new Date(new Date(C_TED_Primary_Fixed_Data.effectiveTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
-    dnow = new Date().getTime();
-    dpercent = (dnow - dold) / (dnew - dold) * 100;
-
-    remGB = C_TED_Primary_Fixed_Data.currentAmount;
-    remDays = C_TED_Primary_Fixed_Data.remainingDaysForRenewal + 1;
-    remDaysFrac = (remDays - 1) + "d " + msToTime(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + remDays, 0, 0, 0) - new Date());
-    compAvgUsage = (remGB / ((dnew - new Date()) / (1000 * 60 * 60 * 24))).toFixed(2);
-    if ((dnew - new Date()) / (1000 * 60 * 60 * 24) < 1) compAvgUsage = remGB;
-    ForDoms(".compAvgUsage", el => { el.innerText = compAvgUsage; });
-
-    document.getElementById("progressbar").style.width = C_TED_Primary_Fixed_Data.usagePercentage + "%";
-    document.getElementById("progressbarValue").innerText = C_TED_Primary_Fixed_Data.usagePercentage + "%";
-    document.getElementById("progressbarValue").style.left = "calc(" + C_TED_Primary_Fixed_Data.usagePercentage + "% - 21px)";
-    document.getElementById("progressbarDate").style.width = dpercent + "%";
-    document.getElementById("progressbarDateValue").innerText = dpercent.toFixed(2) + "%";
-    document.getElementById("progressbarDateValue").style.left = "calc(" + dpercent.toFixed(2) + "% - 21px)";
-    //document.getElementById("datePercentage").innerText = dpercent.toFixed(2);
-
-    oldusetimeperc = (dpercent - C_TED_Primary_Fixed_Data.usagePercentage).toFixed(2);
-    usetimeperc = (((0.01 * dpercent) * C_TED_Primary_Fixed_Data.initialAmount) - C_TED_Primary_Fixed_Data.usedAmount).toFixed(2);
-
-    ForDoms(".freeUnitEnName", el => { el.innerText = C_TED_Primary_Fixed_Data.offeringName; });
-    ForDoms(".freeAmount", el => { el.innerText = C_TED_Primary_Fixed_Data.currentAmount; });
-    ForDoms(".usetimepercentage", el => { el.innerText = usetimeperc; if (usetimeperc < 0) el.style.color = "red"; else el.style.color = "lightgreen"; });
-    ForDoms(".measureUnitEnName", el => { el.innerText = unitEnIds[C_TED_Primary_Fixed_Data.measureUnit]; });
-    ForDoms(".usedAmount", el => { el.innerText = C_TED_Primary_Fixed_Data.usedAmount.toFixed(2); });
-    ForDoms(".initialTotalAmount", el => { el.innerText = C_TED_Primary_Fixed_Data.initialAmount; });
-    ForDoms(".usagePercentage", el => { el.innerText = C_TED_Primary_Fixed_Data.usagePercentage; });
-    ForDoms(".renewalDate", el => { el.innerText = new Date(dnew).getFullYear() + "-" + (new Date(dnew).getMonth() + 1) + "-" + new Date(dnew).getDate(); });
-    ForDoms(".subscriptionDate", el => { el.innerText = new Date(dold).getFullYear() + "-" + (new Date(dold).getMonth() + 1) + "-" + new Date(dold).getDate(); }); //C_TED_Primary_Fixed_Data.subscriptionDate;
-    ForDoms(".remainingDaysForRenewal", el => { el.innerText = remDaysFrac; });
+  if (C_TED_Primary_Fixed_Data == undefined) {
+    ForDoms(".freeUnitEnName", el => { el.innerHTML = "<h3>No Active Internet Bundle</h3>"; document.querySelector("#info").className = "nobundleView"; });
     ForDoms("#balance", el => { el.innerText = "💰 " + (balanceObj == undefined ? "loading..." : (balanceObj.body.balanceInfo[0].totalAmount / 10000).toFixed(2)) + " EGP" });
+    return;
+  }
 
-    ForDoms(".freeUnitEnName1", el => { el.style.display = "none"; });
-    ForDoms(".pbExtraWrapper", el => { el.style.display = "none"; });
+  dnew = new Date(new Date(C_TED_Primary_Fixed_Data.expireTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
+  dold = new Date(new Date(C_TED_Primary_Fixed_Data.effectiveTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
+  dnow = new Date().getTime();
+  dpercent = (dnow - dold) / (dnew - dold) * 100;
 
-    // add to existing localStorage usageHistory
-    if (typeof C_TED_Primary_Fixed_Data != "undefined")
-        LogUsage(C_TED_Primary_Fixed_Data, true)
+  remGB = C_TED_Primary_Fixed_Data.currentAmount;
+  remDays = C_TED_Primary_Fixed_Data.remainingDaysForRenewal + 1;
+  remDaysFrac = `${ remDays - 1 }d  ${msToTime(diffToDaysAhead(remDays))}`;
+  compAvgUsage = (remGB / ((dnew - new Date()) / (1000 * 60 * 60 * 24))).toFixed(2);
+  if ((dnew - new Date()) / (1000 * 60 * 60 * 24) < 1) compAvgUsage = remGB;
+  ForDoms(".compAvgUsage", el => { el.innerText = compAvgUsage; });
 
-    if (usageObj.body[0].freeUnitBeanDetailList.length <= 1) return;
+  document.getElementById("progressbar").style.width = C_TED_Primary_Fixed_Data.usagePercentage + "%";
+  document.getElementById("progressbarValue").innerText = C_TED_Primary_Fixed_Data.usagePercentage + "%";
+  document.getElementById("progressbarValue").style.left = "calc(" + C_TED_Primary_Fixed_Data.usagePercentage + "% - 21px)";
+  document.getElementById("progressbarDate").style.width = dpercent + "%";
+  document.getElementById("progressbarDateValue").innerText = dpercent.toFixed(2) + "%";
+  document.getElementById("progressbarDateValue").style.left = "calc(" + dpercent.toFixed(2) + "% - 21px)";
+  //document.getElementById("datePercentage").innerText = dpercent.toFixed(2);
 
-    usageObj.body[0].freeUnitBeanDetailList.forEach((x, index) => createInfoFor(x, index));
+  oldusetimeperc = (dpercent - C_TED_Primary_Fixed_Data.usagePercentage).toFixed(2);
+  usetimeperc = (((0.01 * dpercent) * C_TED_Primary_Fixed_Data.initialAmount) - C_TED_Primary_Fixed_Data.usedAmount).toFixed(2);
 
-    PrintUsageHistory(C_TED_Primary_Fixed_Data)
+  ForDoms(".freeUnitEnName", el => { el.innerText = C_TED_Primary_Fixed_Data.offeringName; });
+  ForDoms(".freeAmount", el => { el.innerText = C_TED_Primary_Fixed_Data.currentAmount; });
+  ForDoms(".usetimepercentage", el => { el.innerText = usetimeperc; if (usetimeperc < 0) el.style.color = "red"; else el.style.color = "lightgreen"; });
+  ForDoms(".measureUnitEnName", el => { el.innerText = unitEnIds[C_TED_Primary_Fixed_Data.measureUnit]; });
+  ForDoms(".usedAmount", el => { el.innerText = C_TED_Primary_Fixed_Data.usedAmount.toFixed(2); });
+  ForDoms(".initialTotalAmount", el => { el.innerText = C_TED_Primary_Fixed_Data.initialAmount; });
+  ForDoms(".usagePercentage", el => { el.innerText = C_TED_Primary_Fixed_Data.usagePercentage; });
+  ForDoms(".renewalDate", el => { el.innerText = new Date(dnew).getFullYear() + "-" + (new Date(dnew).getMonth() + 1) + "-" + new Date(dnew).getDate(); });
+  ForDoms(".subscriptionDate", el => { el.innerText = new Date(dold).getFullYear() + "-" + (new Date(dold).getMonth() + 1) + "-" + new Date(dold).getDate(); }); //C_TED_Primary_Fixed_Data.subscriptionDate;
+  ForDoms(".remainingDaysForRenewal", el => { el.innerText = remDaysFrac; });
+  ForDoms("#balance", el => { el.innerText = "💰 " + (balanceObj == undefined ? "loading..." : (balanceObj.body.balanceInfo[0].totalAmount / 10000).toFixed(2)) + " EGP" });
+
+  ForDoms(".freeUnitEnName1", el => { el.style.display = "none"; });
+  ForDoms(".pbExtraWrapper", el => { el.style.display = "none"; });
+
+  // add to existing localStorage usageHistory
+  if (typeof C_TED_Primary_Fixed_Data != "undefined")
+    LogUsage(C_TED_Primary_Fixed_Data, true)
+
+  if (usageObj.body[0].freeUnitBeanDetailList.length <= 1) return;
+
+  usageObj.body[0].freeUnitBeanDetailList.forEach((x, index) => createInfoFor(x, index));
+
+  PrintUsageHistory(C_TED_Primary_Fixed_Data)
 }
 
 
@@ -629,48 +632,48 @@ if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(naviga
 if (isMobile) maxHistory = maxHistoryMobile;
 
 function PrintUsageHistory(package){
-    console.log(`Printing usage history for ${package.itemCode}`)
-    let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
-    document.querySelectorAll(".usageHistoryTable").forEach(child => child.parentNode.removeChild(child))
-    document.body.appendChild(Object.assign(document.createElement('table'),{
-        innerHTML:
-        `<tr><td colspan="3"><span style="font-size: x-small;">${package.offeringName}</span><a onclick="localStorage.removeItem('${savedLogName}');usageHistoryItemDoms.innerHTML=\'\';" style="float: left; cursor:pointer; text-decoration: underline;">[clear]</a></td></tr>`,
-        style: "position: absolute; top: 10px;",
-        className: "usageHistoryTable"
-    }));
-    if (cachedLocalStorage[savedLogName] === undefined) {localStorage_setItem(savedLogName, JSON.stringify([])); }
-    for (let [index, usageDom] of JSON.parse(cachedLocalStorage[savedLogName]).entries()) {
-        let usageNumDom = "";
-        if (index > 0){
-            let usageNum = usageDom.key - JSON.parse(cachedLocalStorage[savedLogName])[index - 1].key;
-            usageNumDom = usageNum.toFixed(2) + " GB";
-            if (usageNum < 0) { usageNumDom = "<span style=\"color: lightgreen;\">" + Math.abs(usageNum).toFixed(2) + " GB</span>"; }
-        }
-        document.querySelector(".usageHistoryTable").appendChild(Object.assign(document.createElement('tr'),{
-            innerHTML: `<td>${usageDom.value}</td><td>${usageNumDom}</td>`
-        }));
+  console.log(`Printing usage history for ${package.itemCode}`)
+  let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
+  document.querySelectorAll(".usageHistoryTable").forEach(child => child.parentNode.removeChild(child))
+  document.body.appendChild(Object.assign(document.createElement('table'),{
+    innerHTML:
+    `<tr><td colspan="3"><span style="font-size: x-small;">${package.offeringName}</span><a onclick="localStorage.removeItem('${savedLogName}');usageHistoryItemDoms.innerHTML=\'\';" style="float: left; cursor:pointer; text-decoration: underline;">[clear]</a></td></tr>`,
+    style: "position: absolute; top: 10px;",
+    className: "usageHistoryTable"
+  }));
+  if (cachedLocalStorage[savedLogName] === undefined) {localStorage_setItem(savedLogName, JSON.stringify([])); }
+  for (let [index, usageDom] of JSON.parse(cachedLocalStorage[savedLogName]).entries()) {
+    let usageNumDom = "";
+    if (index > 0){
+      let usageNum = usageDom.key - JSON.parse(cachedLocalStorage[savedLogName])[index - 1].key;
+      usageNumDom = usageNum.toFixed(2) + " GB";
+      if (usageNum < 0) { usageNumDom = "<span style=\"color: lightgreen;\">" + Math.abs(usageNum).toFixed(2) + " GB</span>"; }
     }
+    document.querySelector(".usageHistoryTable").appendChild(Object.assign(document.createElement('tr'),{
+      innerHTML: `<td>${usageDom.value}</td><td>${usageNumDom}</td>`
+    }));
+  }
 }
 
 SmartGetUsage(serviceNumber);
 
 toggleMerge = function (elm) {
-    if (!elm.classList.toggle("dim")) { RefreshInfo(); PrintUsageHistory(C_TED_Primary_Fixed_Data); return; }
+  if (!elm.classList.toggle("dim")) { RefreshInfo(); PrintUsageHistory(C_TED_Primary_Fixed_Data); return; }
 
-    let itemcode = elm.getAttribute("itemcode") + "_" + elm.getAttribute("index");
-    PrintUsageHistory(usageObj.body[0].freeUnitBeanDetailList.find(x => x.itemCode == elm.getAttribute("itemcode")))
-    document.querySelector(".usedAmount").innerHTML = (parseFloat(document.querySelector(".usedAmount").innerText) + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText)).toFixed(2);
-    document.querySelector(".initialTotalAmount").innerHTML = parseFloat(document.querySelector(".initialTotalAmount").innerText) + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText);
-    document.querySelector(".freeAmount").innerHTML = Number((parseFloat(document.querySelector(".freeAmount").innerText) + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText)).toFixed(2));
-    let mergedUsedAmount = parseFloat(C_TED_Primary_Fixed_Data.usedAmount + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText));
-    let mergedFreeAmount = parseFloat(C_TED_Primary_Fixed_Data.currentAmount + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText));
-    let mergedInitialTotalAmount = parseFloat(C_TED_Primary_Fixed_Data.initialAmount + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText));
-    let mergedUsagePercentage = Number((( mergedUsedAmount / mergedInitialTotalAmount ) * 100).toFixed(2));
+  let itemcode = elm.getAttribute("itemcode") + "_" + elm.getAttribute("index");
+  PrintUsageHistory(usageObj.body[0].freeUnitBeanDetailList.find(x => x.itemCode == elm.getAttribute("itemcode")))
+  document.querySelector(".usedAmount").innerHTML = (parseFloat(document.querySelector(".usedAmount").innerText) + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText)).toFixed(2);
+  document.querySelector(".initialTotalAmount").innerHTML = parseFloat(document.querySelector(".initialTotalAmount").innerText) + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText);
+  document.querySelector(".freeAmount").innerHTML = Number((parseFloat(document.querySelector(".freeAmount").innerText) + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText)).toFixed(2));
+  let mergedUsedAmount = parseFloat(C_TED_Primary_Fixed_Data.usedAmount + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText));
+  let mergedFreeAmount = parseFloat(C_TED_Primary_Fixed_Data.currentAmount + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText));
+  let mergedInitialTotalAmount = parseFloat(C_TED_Primary_Fixed_Data.initialAmount + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText));
+  let mergedUsagePercentage = Number((( mergedUsedAmount / mergedInitialTotalAmount ) * 100).toFixed(2));
 
-    document.querySelector(".compAvgUsage").innerText = (mergedFreeAmount / ((dnew-new Date())/(1000*60*60*24))).toFixed(2);
-    document.querySelector(".usetimepercentage").innerText = (((0.01 * dpercent) * mergedInitialTotalAmount) - mergedUsedAmount).toFixed(2);
+  document.querySelector(".compAvgUsage").innerText = (mergedFreeAmount / ((dnew-new Date())/(1000*60*60*24))).toFixed(2);
+  document.querySelector(".usetimepercentage").innerText = (((0.01 * dpercent) * mergedInitialTotalAmount) - mergedUsedAmount).toFixed(2);
 
-    document.querySelector("#progressbar").style.width = mergedUsagePercentage + "%";
-    document.querySelector("#progressbarValue").innerText = mergedUsagePercentage + "%";
-    document.querySelector("#progressbarValue").style.left = "calc(" + mergedUsagePercentage + "% - 21px)";
+  document.querySelector("#progressbar").style.width = mergedUsagePercentage + "%";
+  document.querySelector("#progressbarValue").innerText = mergedUsagePercentage + "%";
+  document.querySelector("#progressbarValue").style.left = "calc(" + mergedUsagePercentage + "% - 21px)";
 }
