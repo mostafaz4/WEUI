@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-01-20.1
+// @version      2025-01-20.2
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -420,9 +420,9 @@ function GetBalance() {
 
 
 function formatedDate(date) {
-  const time = date.toLocaleString('en-eg', { hour: "2-digit", minute: "2-digit", hour12: true })
-  const date = date.toLocaleString('en-uk', { day: "2-digit", month: "short" })
-  return `${date} ${time}`;
+  const time_str = date.toLocaleString('en-eg', { hour: "2-digit", minute: "2-digit", hour12: true })
+  const date_str = date.toLocaleString('en-uk', { day: "2-digit", month: "short" })
+  return `${date_str} ${time_str}`;
 };
 
 function SmartGetUsage() {
@@ -636,13 +636,17 @@ if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(naviga
 if (isMobile) maxHistory = maxHistoryMobile;
 
 function showHistory() { return (localStorage.getItem("show_history") ?? 'true') === 'true'; }
-function toggleShowHistory() {
+window.toggleShowHistory = () => {
   if ((localStorage.getItem("show_history") ?? 'true') === 'true') {
     localStorage.setItem("show_history", false)
     document.querySelector(".usageHistoryTable").classList.add("d-none")
+    if (show_history_btn)
+      show_history_btn.innerHTML = "[+]"
   } else {
     localStorage.setItem("show_history", true)
     document.querySelector(".usageHistoryTable").classList.remove("d-none")
+    if (show_history_btn)
+      show_history_btn.innerHTML = "[-]"
   }
 }
 function PrintUsageHistory(package){
@@ -652,8 +656,8 @@ function PrintUsageHistory(package){
   document.body.appendChild(Object.assign(document.createElement('table'),{
     innerHTML:
     `<tr><td colspan="3">
-    <a onclick="toggleShowHistory()" style="float: left; cursor:pointer; text-decoration: underline;">${showHistory() ? "[-]" : "[+]"}</a>
-    <a onclick="if (confirm("Clear History?")) {localStorage.removeItem('${savedLogName}');usageHistoryItemDoms.innerHTML=\'\';}" style="float: left; cursor:pointer; text-decoration: underline;">[clear]</a>
+    <a onclick="toggleShowHistory()" id="show_history_btn" style="float: left; cursor:pointer; text-decoration: underline;">${showHistory() ? "[-]" : "[+]"}</a>
+    <a onclick="if (confirm('Clear History?')) {localStorage.removeItem('${savedLogName}');usageHistoryItemDoms.innerHTML=\'\';}" style="float: left; cursor:pointer; text-decoration: underline;">[clear]</a>
     <span style="font-size: x-small;">${package.offeringName}</span>
     </td></tr>`,
     style: "position: absolute; top: 10px;",
