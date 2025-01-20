@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-01-20.0
+// @version      2025-01-20.1
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -54,6 +54,10 @@ maxHistoryMobile = 4;
     text-align: right;
     border-bottom: 1px solid #333 !important;
     border-radius: 5px;
+  }
+
+  .usageHistoryTable.d-none > tr:not(:first-child) {
+    display: none;
   }
 
   .raw {}
@@ -415,16 +419,15 @@ function GetBalance() {
 
 
 
-function formatedDate() {
-  const now = new Date();
-  const time = now.toLocaleString('en-eg', { hour: "2-digit", minute: "2-digit", hour12: true })
-  const date = now.toLocaleString('en-uk', { day: "2-digit", month: "short" })
+function formatedDate(date) {
+  const time = date.toLocaleString('en-eg', { hour: "2-digit", minute: "2-digit", hour12: true })
+  const date = date.toLocaleString('en-uk', { day: "2-digit", month: "short" })
   return `${date} ${time}`;
 };
 
 function SmartGetUsage() {
-  nowFormatedDateTime = formatedDate()
-  window.lastRefresh.innerText = "Generated: " + nowFormatedDateTime;
+  dataDate = new Date();
+  window.lastRefresh.innerText = "Generated: " + formatedDate(dataDate);
 
   usageObj, balanceObj = undefined;
 
@@ -543,21 +546,22 @@ function createInfoFor(package, index) {
 
 function LogUsage(package, print){
   let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
-  if (cachedLocalStorage[savedLogName] === undefined) localStorage_setItem(savedLogName, JSON.stringify([]));
+  if (cachedLocalStorage[savedLogName] === undefined)
+    localStorage_setItem(savedLogName, JSON.stringify([]));
 
   var history = JSON.parse(cachedLocalStorage[savedLogName]);
   if (history == null) return
 
   if (history.length > 0){
-      if (history[history.length - 1].key != package.usedAmount) {
-          if (history.length >= maxHistory && history.length > 0)
-              history.shift();
-      } else {
-          return
-      }
+    if (history[history.length - 1].key != package.usedAmount) {
+      if (history.length >= maxHistory && history.length > 0)
+        history.shift();
+    } else {
+      return
+    }
   }
 
-  history.push({ key: package.usedAmount, value: nowFormatedDateTime })
+  history.push({ key: package.usedAmount, value: dataDate })
   localStorage_setItem(savedLogName, JSON.stringify(history));
 
   if (!print) return
@@ -631,16 +635,32 @@ isMobile = false;
 if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) { document.body.style.background = 0; isMobile = true; }
 if (isMobile) maxHistory = maxHistoryMobile;
 
+function showHistory() { return (localStorage.getItem("show_history") ?? 'true') === 'true'; }
+function toggleShowHistory() {
+  if ((localStorage.getItem("show_history") ?? 'true') === 'true') {
+    localStorage.setItem("show_history", false)
+    document.querySelector(".usageHistoryTable").classList.add("d-none")
+  } else {
+    localStorage.setItem("show_history", true)
+    document.querySelector(".usageHistoryTable").classList.remove("d-none")
+  }
+}
 function PrintUsageHistory(package){
   console.log(`Printing usage history for ${package.itemCode}`)
   let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
   document.querySelectorAll(".usageHistoryTable").forEach(child => child.parentNode.removeChild(child))
   document.body.appendChild(Object.assign(document.createElement('table'),{
     innerHTML:
-    `<tr><td colspan="3"><span style="font-size: x-small;">${package.offeringName}</span><a onclick="localStorage.removeItem('${savedLogName}');usageHistoryItemDoms.innerHTML=\'\';" style="float: left; cursor:pointer; text-decoration: underline;">[clear]</a></td></tr>`,
+    `<tr><td colspan="3">
+    <a onclick="toggleShowHistory()" style="float: left; cursor:pointer; text-decoration: underline;">${showHistory() ? "[-]" : "[+]"}</a>
+    <a onclick="if (confirm("Clear History?")) {localStorage.removeItem('${savedLogName}');usageHistoryItemDoms.innerHTML=\'\';}" style="float: left; cursor:pointer; text-decoration: underline;">[clear]</a>
+    <span style="font-size: x-small;">${package.offeringName}</span>
+    </td></tr>`,
     style: "position: absolute; top: 10px;",
     className: "usageHistoryTable"
   }));
+  if (showHistory())
+    document.querySelector(".usageHistoryTable").classList.add("d-none")
   if (cachedLocalStorage[savedLogName] === undefined) {localStorage_setItem(savedLogName, JSON.stringify([])); }
   for (let [index, usageDom] of JSON.parse(cachedLocalStorage[savedLogName]).entries()) {
     let usageNumDom = "";
@@ -650,7 +670,7 @@ function PrintUsageHistory(package){
       if (usageNum < 0) { usageNumDom = "<span style=\"color: lightgreen;\">" + Math.abs(usageNum).toFixed(2) + " GB</span>"; }
     }
     document.querySelector(".usageHistoryTable").appendChild(Object.assign(document.createElement('tr'),{
-      innerHTML: `<td>${usageDom.value}</td><td>${usageNumDom}</td>`
+      innerHTML: `<td>${formatedDate(usageDom.value)}</td><td>${usageNumDom}</td>`
     }));
   }
 }
