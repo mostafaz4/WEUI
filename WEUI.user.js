@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-01-20.7
+// @version      2025-01-20.8
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -660,7 +660,7 @@ function PrintUsageHistory(package){
   document.body.appendChild(Object.assign(document.createElement('table'),{
     innerHTML:
     `<tr><td colspan="3">
-    <a onclick="toggleShowHistory()" id="show_history_btn" style="float: left; cursor:pointer; user-select:none; margin-inline: 5px;"> ${showHistory() ? "[-]" : "[+]"} </a>
+    <a onclick="toggleShowHistory()" id="show_history_btn" style="float: left; cursor:pointer; user-select:none; margin-inline: 5px;"> ${showHistory() ? "[ - ]" : "[ + ]"} </a>
     <a onclick="if (confirm('Clear History?')) { clearHistory('${savedLogName}') }" style="float: left; cursor:pointer; user-select:none; text-decoration: underline;">[clear]</a>
     <span style="font-size: x-small;">${package.offeringName}</span>
     </td></tr>`,
