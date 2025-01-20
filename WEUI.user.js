@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-01-20.2
+// @version      2025-01-20.3
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -663,7 +663,7 @@ function PrintUsageHistory(package){
     style: "position: absolute; top: 10px;",
     className: "usageHistoryTable"
   }));
-  if (showHistory())
+  if (!showHistory())
     document.querySelector(".usageHistoryTable").classList.add("d-none")
   if (cachedLocalStorage[savedLogName] === undefined) {localStorage_setItem(savedLogName, JSON.stringify([])); }
   for (let [index, usageDom] of JSON.parse(cachedLocalStorage[savedLogName]).entries()) {
