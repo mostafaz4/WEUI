@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-01-20.3
+// @version      2025-01-20.7
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -56,7 +56,7 @@ maxHistoryMobile = 4;
     border-radius: 5px;
   }
 
-  .usageHistoryTable.d-none > tr:not(:first-child) {
+  .usageHistoryTable.d-none tr:not(:first-child) {
     display: none;
   }
 
@@ -423,7 +423,7 @@ function formatedDate(date) {
   const time_str = date.toLocaleString('en-eg', { hour: "2-digit", minute: "2-digit", hour12: true })
   const date_str = date.toLocaleString('en-uk', { day: "2-digit", month: "short" })
   return `${date_str} ${time_str}`;
-};
+}
 
 function SmartGetUsage() {
   dataDate = new Date();
@@ -561,7 +561,7 @@ function LogUsage(package, print){
     }
   }
 
-  history.push({ key: package.usedAmount, value: dataDate })
+  history.push({ key: package.usedAmount, value: dataDate.getTime() })
   localStorage_setItem(savedLogName, JSON.stringify(history));
 
   if (!print) return
@@ -641,13 +641,17 @@ window.toggleShowHistory = () => {
     localStorage.setItem("show_history", false)
     document.querySelector(".usageHistoryTable").classList.add("d-none")
     if (show_history_btn)
-      show_history_btn.innerHTML = "[+]"
+      show_history_btn.innerHTML = "[ + ]"
   } else {
     localStorage.setItem("show_history", true)
     document.querySelector(".usageHistoryTable").classList.remove("d-none")
     if (show_history_btn)
-      show_history_btn.innerHTML = "[-]"
+      show_history_btn.innerHTML = "[ - ]"
   }
+}
+window.clearHistory = (savedLogName) => {
+  localStorage.removeItem(savedLogName);
+  document.querySelector(".usageHistoryTable tbody")?.replaceChildren(document.querySelector(".usageHistoryTable tbody")?.firstElementChild);
 }
 function PrintUsageHistory(package){
   console.log(`Printing usage history for ${package.itemCode}`)
@@ -656,8 +660,8 @@ function PrintUsageHistory(package){
   document.body.appendChild(Object.assign(document.createElement('table'),{
     innerHTML:
     `<tr><td colspan="3">
-    <a onclick="toggleShowHistory()" id="show_history_btn" style="float: left; cursor:pointer; text-decoration: underline;">${showHistory() ? "[-]" : "[+]"}</a>
-    <a onclick="if (confirm('Clear History?')) {localStorage.removeItem('${savedLogName}');usageHistoryItemDoms.innerHTML=\'\';}" style="float: left; cursor:pointer; text-decoration: underline;">[clear]</a>
+    <a onclick="toggleShowHistory()" id="show_history_btn" style="float: left; cursor:pointer; user-select:none; margin-inline: 5px;"> ${showHistory() ? "[-]" : "[+]"} </a>
+    <a onclick="if (confirm('Clear History?')) { clearHistory('${savedLogName}') }" style="float: left; cursor:pointer; user-select:none; text-decoration: underline;">[clear]</a>
     <span style="font-size: x-small;">${package.offeringName}</span>
     </td></tr>`,
     style: "position: absolute; top: 10px;",
@@ -673,8 +677,8 @@ function PrintUsageHistory(package){
       usageNumDom = usageNum.toFixed(2) + " GB";
       if (usageNum < 0) { usageNumDom = "<span style=\"color: lightgreen;\">" + Math.abs(usageNum).toFixed(2) + " GB</span>"; }
     }
-    document.querySelector(".usageHistoryTable").appendChild(Object.assign(document.createElement('tr'),{
-      innerHTML: `<td>${formatedDate(usageDom.value)}</td><td>${usageNumDom}</td>`
+    document.querySelector(".usageHistoryTable tbody").appendChild(Object.assign(document.createElement('tr'),{
+      innerHTML: `<td>${formatedDate(new Date(usageDom.value))}</td><td>${usageNumDom}</td>`
     }));
   }
 }
