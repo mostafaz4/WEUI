@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-01-20.8
+// @version      2025-01-21.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -195,6 +195,14 @@ maxHistoryMobile = 4;
   .dim {
     filter: brightness(0.5);
   }
+
+  .bad-red {
+    color: #905a5a
+  }
+  .good-light-green {
+    color: lightgreen
+  }
+
 </style>
 
 <div id="error"></div>
@@ -670,15 +678,17 @@ function PrintUsageHistory(package){
   if (!showHistory())
     document.querySelector(".usageHistoryTable").classList.add("d-none")
   if (cachedLocalStorage[savedLogName] === undefined) {localStorage_setItem(savedLogName, JSON.stringify([])); }
+  let dimGB = `<span class="dim">GB</span>`
+  let printColoredSize = (size, prev) => `<span class="${size < 0 || size < prev ? "good-light-green" : "bad-red"}">${Math.abs(size).toFixed(2)} ${dimGB}</span>`;
   for (let [index, usageDom] of JSON.parse(cachedLocalStorage[savedLogName]).entries()) {
     let usageNumDom = "";
-    if (index > 0){
-      let usageNum = usageDom.key - JSON.parse(cachedLocalStorage[savedLogName])[index - 1].key;
-      usageNumDom = usageNum.toFixed(2) + " GB";
-      if (usageNum < 0) { usageNumDom = "<span style=\"color: lightgreen;\">" + Math.abs(usageNum).toFixed(2) + " GB</span>"; }
+    let prev_key = JSON.parse(cachedLocalStorage?.[savedLogName])?.[index - 1]?.key
+    if (index > 0) {
+      let usageNum = usageDom.key - prev_key;
+      usageNumDom = printColoredSize(usageNum);
     }
     document.querySelector(".usageHistoryTable tbody").appendChild(Object.assign(document.createElement('tr'),{
-      innerHTML: `<td>${formatedDate(new Date(usageDom.value))}</td><td>${usageNumDom}</td>`
+      innerHTML: `<td>${printColoredSize(usageDom.key, prev_key)}</td><td>${formatedDate(new Date(usageDom.value))}</td><td>${usageNumDom}</td>`
     }));
   }
 }
