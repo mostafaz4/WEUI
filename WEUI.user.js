@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-01-21.0
+// @version      2025-02-01.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -336,17 +336,6 @@ function localStorage_setItem(key, string) { localStorage.setItem(key, string); 
 function consoleLog(obj) { if (!log) return; console.log(obj); }
 function generateRandomHexString(length){ return [...Array(length)].map(() => Math.floor(Math.random() * 16).toString(16)).join('') }
 
-function getLatestAppVersionNumber() {
-  xhr_versionNo = new XMLHttpRequest();
-  xhr_versionNo.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/cms/getCzAppVersionList');
-  xhr_versionNo.setRequestHeader('Content-Type', "application/json")
-  xhr_versionNo.send(`{"versionType":"P","versionStatus":"R","appType":"Selfcare","osType":"google"}`);
-  xhr_versionNo.onload = function (event) {
-    appVersionNo = JSON.parse(xhr_versionNo.response).body[0].versionNo
-  };
-}
-getLatestAppVersionNumber()
-
 function prepare_xhr(xhr) {
   xhr.withCredentials = true;
   xhr.setRequestHeader('accept', "application/json, text/plain, */*")
@@ -433,13 +422,33 @@ function formatedDate(date) {
   return `${date_str} ${time_str}`;
 }
 
-function SmartGetUsage() {
+async function getLatestAppVersionNumber() {
+  return new Promise((resolve, reject) => {
+    try {
+      xhr_versionNo = new XMLHttpRequest();
+      xhr_versionNo.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/cms/getCzAppVersionList');
+      xhr_versionNo.setRequestHeader('Content-Type', "application/json")
+      xhr_versionNo.send(`{"versionType":"P","versionStatus":"R","appType":"Selfcare","osType":"google"}`);
+      xhr_versionNo.onload = function (event) {
+        resolve(JSON.parse(xhr_versionNo.response).body[0].versionNo)
+      }
+      xhr_versionNo.ontimeout = function () { reject(null) }
+      xhr_versionNo.onerror = function (event) { reject(event) }
+    } catch (ex) {
+      reject(ex)
+    }
+  })
+}
+
+async function SmartGetUsage() {
   dataDate = new Date();
   window.lastRefresh.innerText = "Generated: " + formatedDate(dataDate);
 
   usageObj, balanceObj = undefined;
 
   //if (((new Date - lastLoginTime) / 1000 / 60) > 15)
+
+  appVersionNo = await getLatestAppVersionNumber()
   Login();
 }
 
