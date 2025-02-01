@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-02-01.0
+// @version      2025-02-01.1
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -210,8 +210,8 @@ maxHistoryMobile = 4;
 <div id="rawBalanceResponse" class="raw"></div>
 <div id="info">
   <h3 align="center"><span class="freeUnitEnName"></span></h3>
-  <h4>Rem: <span class="freeAmount"></span> <span class="measureUnitEnName"></span> for <span class="remainingDaysForRenewal"></span></h4>
-  <h4>Rate: <span class="compAvgUsage"></span> <span class="measureUnitEnName"></span>/day, <span class="usetimepercentage"></span> <span class="measureUnitEnName"></span> safe.</h4>
+  <h4 style="margin-bottom: 10px;">Rem: <span class="freeAmount"></span> <span class="measureUnitEnName"></span> for <span class="remainingDaysForRenewal"></span></h4>
+  <h4 style="margin-top: 10px;">Rate: <span class="compAvgUsage"></span> <span class="measureUnitEnName"></span>/day, <span class="usetimepercentage"></span> <span class="measureUnitEnName"></span> safe.</h4>
 
   <h4 class="pbWrapper" style="display: flow-root; line-height: 30px;position: relative;">
       <span class="tip-top" id="progressbarValue">0%</span>
@@ -282,7 +282,7 @@ maxHistoryMobile = 4;
     <h3>
       <hr style="border: 1px solid #8c8c8c;"><span class="freeUnitEnName_overAll" style="text-align: center;display: none;font-size: initial;color: #ddefff;">Overall Quota</span>
     </h3>
-    <h4 class="pbExtraWrapper_overAll" style="display: none; margin-bottom: 0px;">
+    <h4 class="pbExtraWrapper_overAll" style="display: none; margin-bottom: 10px;">
       <div style="line-height: 40px;position: relative;">
         <span class="tip-top" id="progressbarValue_overAll">0%</span>
         <div class="progressLayoutBackground">&nbsp;</div>
@@ -305,8 +305,11 @@ maxHistoryMobile = 4;
   </div>
 
   <!--<button class="buttonRefresh" onclick="SmartGetUsage(serviceNumber);">Refresh</button>-->
-  <span style="position: absolute; float: right; left: 100%; font-size: 10px; width: fit-content; color: gray; margin: 27px -190px; pointer-events: none;" id="lastRefresh"></span>
-  <span style="position: absolute; font-size: 10px; color: gray; margin: 25px 25px; pointer-events: none;" id="balance"></span>
+  <div style="display: flex; position: absolute; pointer-events: none; font-size: 10px; margin-top: 25px; place-items: center; justify-self: anchor-center; gap: 50px;">
+    <span style="color: gray; flex-grow: 1;" id="balance"></span>
+    <span style="color: gray;" id="lastRefresh"></span>
+  </div>
+
 </div>
 
 
@@ -442,7 +445,7 @@ async function getLatestAppVersionNumber() {
 
 async function SmartGetUsage() {
   dataDate = new Date();
-  window.lastRefresh.innerText = "Generated: " + formatedDate(dataDate);
+  window.lastRefresh.innerText = `✍🏼 ${formatedDate(dataDate)}`;
 
   usageObj, balanceObj = undefined;
 
