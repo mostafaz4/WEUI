@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-02-01.1
+// @version      2025-03-01.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -28,8 +28,7 @@ maxHistoryMobile = 4;
 
 
 
-
-
+<script>var loginObj, usageObj, balanceObj, appVersionNo;</script>
 
 <title>WE Consumption details</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -333,8 +332,6 @@ lastLoginTime = new Date(0)
 deviceid = generateRandomHexString(16)
 cachedLocalStorage = {...localStorage}
 
-var loginObj, usageObj, balanceObj, appVersionNo;
-
 function localStorage_setItem(key, string) { localStorage.setItem(key, string); cachedLocalStorage[key] = string; }
 function consoleLog(obj) { if (!log) return; console.log(obj); }
 function generateRandomHexString(length){ return [...Array(length)].map(() => Math.floor(Math.random() * 16).toString(16)).join('') }
@@ -351,8 +348,6 @@ function prepare_xhr(xhr) {
   xhr.setRequestHeader('delegatorsubsid', "")
   xhr.setRequestHeader('deviceid', deviceid)
   xhr.setRequestHeader('Content-Type', "application/json")
-  xhr.setRequestHeader('Accept-Encoding', "gzip")
-  xhr.setRequestHeader('User-Agent', "okhttp/3.12.12")
   xhr.setRequestHeader('clienttype', "google")
   xhr.setRequestHeader('appversionno', appVersionNo)
 }
@@ -445,7 +440,7 @@ async function getLatestAppVersionNumber() {
 
 async function SmartGetUsage() {
   dataDate = new Date();
-  window.lastRefresh.innerText = `✍🏼 ${formatedDate(dataDate)}`;
+  window.lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
 
   usageObj, balanceObj = undefined;
 
@@ -576,13 +571,10 @@ function LogUsage(package, print){
     if (history[history.length - 1].key != package.usedAmount) {
       if (history.length >= maxHistory && history.length > 0)
         history.shift();
-    } else {
-      return
+      history.push({ key: package.usedAmount, value: dataDate.getTime() })
+      localStorage_setItem(savedLogName, JSON.stringify(history));
     }
   }
-
-  history.push({ key: package.usedAmount, value: dataDate.getTime() })
-  localStorage_setItem(savedLogName, JSON.stringify(history));
 
   if (!print) return
   PrintUsageHistory(package)
@@ -646,8 +638,6 @@ function RefreshInfo() {
   if (usageObj.body[0].freeUnitBeanDetailList.length <= 1) return;
 
   usageObj.body[0].freeUnitBeanDetailList.forEach((x, index) => createInfoFor(x, index));
-
-  PrintUsageHistory(C_TED_Primary_Fixed_Data)
 }
 
 
