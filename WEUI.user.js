@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-03-01.0
+// @version      2025-06-02.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -208,7 +208,7 @@ maxHistoryMobile = 4;
 <div id="rawUsageResponse" class="raw" style="margin-top: 100vh;"></div>
 <div id="rawBalanceResponse" class="raw"></div>
 <div id="info">
-  <h3 align="center"><span class="freeUnitEnName"></span></h3>
+  <h3 align="center" style="margin: 0.4em;"><span class="freeUnitEnName"></span></h3>
   <h4 style="margin-bottom: 10px;">Rem: <span class="freeAmount"></span> <span class="measureUnitEnName"></span> for <span class="remainingDaysForRenewal"></span></h4>
   <h4 style="margin-top: 10px;">Rate: <span class="compAvgUsage"></span> <span class="measureUnitEnName"></span>/day, <span class="usetimepercentage"></span> <span class="measureUnitEnName"></span> safe.</h4>
 
@@ -389,6 +389,8 @@ function GetUsage() {
     GetBalance();
 
     RefreshInfo();
+    
+    drawDifferenceFromLastLoad();
   };
 }
 
@@ -508,12 +510,12 @@ function refreshOverAll() {
   });
 }
 
-unitEnIds = {1106: "B", 1107: "KB", 1108: "MB", 1109: "GB"}
+unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB" }
 
 function createInfoFor(package, index) {
   if (
     package.itemCode == "C_TED_Primary_Fixed_Data" ||
-    document.getElementsByClassName("freeUnitEnName_" + package.itemCode + "_" + index).length > 0
+    document.querySelector(`.freeUnitEnName_${package.itemCode}_${index}`)
   ) return;
 
   package.usedAmount = package.initialAmount - package.currentAmount
@@ -716,4 +718,30 @@ toggleMerge = function (elm) {
   document.querySelector("#progressbar").style.width = mergedUsagePercentage + "%";
   document.querySelector("#progressbarValue").innerText = mergedUsagePercentage + "%";
   document.querySelector("#progressbarValue").style.left = "calc(" + mergedUsagePercentage + "% - 21px)";
+}
+
+drawDifferenceFromLastLoad = function () {
+  let oooo = Object.keys(localStorage)
+      .filter(x => x.startsWith("usageHistory-"+serviceNumber))
+      .map(x => JSON.parse(localStorage[x]).map(y=> ({name: usageObj.body[0].freeUnitBeanDetailList.find(z => x.endsWith(z.itemCode)).itemCode, ...y}) ))
+      .map(x => [x.at(-2)])
+      .map(x => x.map(y => ({
+        name: y.name,
+        value: y.value,
+        obj: usageObj.body[0].freeUnitBeanDetailList.find(z => y.name === z.itemCode),
+        old: y.key})))
+      .flat()
+  oooo.forEach(x => x.consumption = ((x.obj.usedAmount - x.old) / x.obj.initialAmount) * 100)
+  oooo = oooo.filter(item => item.value === Math.max(...oooo.map(item => item.value)));
+  oooo = oooo.map(x => ({...usageObj.body[0].freeUnitBeanDetailList.map((y,index)=>({
+    name: y.itemCode,
+    id: `progressbar_${y.itemCode}_${index}`
+  })).find(z => z.name === x.name), width: x.consumption}))
+  oooo.forEach(x => x.sister_dom = x.name === "C_TED_Primary_Fixed_Data" ? document.querySelector(`#progressbar`) : document.querySelector(`#${x.id}`))
+  oooo = oooo.filter(x => x.sister_dom)
+  oooo.forEach(x => x.sister_dom?.parentNode.insertBefore(Object.assign(document.createElement('div'), {
+    className: "progressbar",
+    style: `width: ${x.width}%; background-color: rgb(220 30 255 / 56%); left: calc(${x.sister_dom.style.width} - ${x.width}%);`,
+    innerHTML: "&nbsp;"
+  }), x.sister_dom.nextSibling))
 }
