@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-06-02.0
+// @version      2025-06-02.1
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -725,7 +725,7 @@ drawDifferenceFromLastLoad = function () {
       .filter(x => x.startsWith("usageHistory-"+serviceNumber))
       .map(x => JSON.parse(localStorage[x]).map(y=> ({name: usageObj.body[0].freeUnitBeanDetailList.find(z => x.endsWith(z.itemCode)).itemCode, ...y}) ))
       .map(x => [x.at(-2)])
-      .map(x => x.map(y => ({
+      .map(x => x.filter(Boolean).map(y => ({
         name: y.name,
         value: y.value,
         obj: usageObj.body[0].freeUnitBeanDetailList.find(z => y.name === z.itemCode),
