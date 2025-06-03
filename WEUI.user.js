@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-06-03.0
+// @version      2025-06-03.1
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -725,23 +725,24 @@ drawDifferenceFromLastLoad = function () {
       .filter(x => x.startsWith("usageHistory-"+serviceNumber))
       .map(x => JSON.parse(localStorage[x]).map(y=> ({name: usageObj.body[0].freeUnitBeanDetailList.find(z => x.endsWith(z.itemCode)).itemCode, ...y}) ))
       .map(x => [x.at(-2)])
-      .map(x => x.map(y => ({
+      .map(x => x.filter(Boolean).map(y => ({
         name: y.name,
         value: y.value,
         obj: usageObj.body[0].freeUnitBeanDetailList.find(z => y.name === z.itemCode),
         old: y.key})))
       .flat()
-  oooo.forEach(x => x.consumption = ((x.obj.usedAmount - x.old) / x.obj.initialAmount) * 100)
+  oooo.forEach(x => {x.usagePercentage = x.obj.usagePercentage; x.consumption = ((x.obj.usedAmount - x.old) / x.obj.initialAmount) * 100})
   oooo = oooo.filter(item => item.value === Math.max(...oooo.map(item => item.value)));
   oooo = oooo.map(x => ({...usageObj.body[0].freeUnitBeanDetailList.map((y,index)=>({
     name: y.itemCode,
-    id: `progressbar_${y.itemCode}_${index}`
+    id: `progressbar_${y.itemCode}_${index}`,
+    x
   })).find(z => z.name === x.name), width: x.consumption}))
   oooo.forEach(x => x.sister_dom = x.name === "C_TED_Primary_Fixed_Data" ? document.querySelector(`#progressbar`) : document.querySelector(`#${x.id}`))
   oooo = oooo.filter(x => x.sister_dom)
   oooo.forEach(x => x.sister_dom?.appendChild(Object.assign(document.createElement('div'), {
     className: "progressbar",
-    style: `width: ${x.sister_dom.parentNode.clientWidth*(x.width/100)}px; background-color: rgb(220 30 255 / 56%); right: 0; display: inline;`,
+    style: `width: ${(((x.sister_dom.parentNode.clientWidth*(x.width/100)) / ((x.x.usagePercentage/100)*x.sister_dom.parentNode.clientWidth)) * 100)}%; background-color: rgb(220 30 255 / 56%); right: 0; display: inline;`,
     innerHTML: "&nbsp;"
   })))
 }
