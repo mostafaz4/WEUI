@@ -723,7 +723,7 @@ toggleMerge = function (elm) {
 drawDifferenceFromLastLoad = function () {
   let oooo = Object.keys(localStorage)
       .filter(x => x.startsWith("usageHistory-"+serviceNumber))
-      .map(x => JSON.parse(localStorage[x]).map(y=> ({name: usageObj.body[0].freeUnitBeanDetailList.find(z => x.endsWith(z.itemCode)).itemCode, ...y}) ))
+      .map(x => JSON.parse(localStorage[x]).map(y=> ({name: usageObj.body[0].freeUnitBeanDetailList.find(z => x.endsWith(z.itemCode))?.itemCode, ...y}) ))
       .map(x => [x.at(-2)])
       .map(x => x.filter(Boolean).map(y => ({
         name: y.name,
@@ -731,7 +731,7 @@ drawDifferenceFromLastLoad = function () {
         obj: usageObj.body[0].freeUnitBeanDetailList.find(z => y.name === z.itemCode),
         old: y.key})))
       .flat()
-  oooo.forEach(x => {x.usagePercentage = x.obj.usagePercentage; x.consumption = ((x.obj.usedAmount - x.old) / x.obj.initialAmount) * 100})
+  oooo.forEach(x => {x.usagePercentage = x.obj?.usagePercentage; x.consumption = ((x.obj?.usedAmount - x.old) / x.obj?.initialAmount) * 100})
   oooo = oooo.filter(item => item.value === Math.max(...oooo.map(item => item.value)));
   oooo = oooo.map(x => ({...usageObj.body[0].freeUnitBeanDetailList.map((y,index)=>({
     name: y.itemCode,
