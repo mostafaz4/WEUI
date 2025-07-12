@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-06-04.0
+// @version      2025-07-12.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -514,9 +514,11 @@ unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB" }
 
 function createInfoFor(package, index) {
   if (
-    package.itemCode == "C_TED_Primary_Fixed_Data" ||
+    (package.itemCode === "C_TED_Primary_Fixed_Data" && C_TED_Primary_Fixed_Data?.offeringName === package.offeringName) ||
     document.querySelector(`.freeUnitEnName_${package.itemCode}_${index}`)
   ) return;
+  if (package.itemCode === "C_TED_Primary_Fixed_Data" && C_TED_Primary_Fixed_Data?.offeringName !== package.offeringName)
+    package.itemCode += "_" + package.offeringName.replace(/\s/g, "_")
 
   package.usedAmount = package.initialAmount - package.currentAmount
   package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
