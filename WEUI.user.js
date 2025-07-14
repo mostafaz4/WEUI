@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-07-12.1
+// @version      2025-07-14.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -530,34 +530,34 @@ function createInfoFor(package, index) {
   nwInfo.className = "transition";
   nwInfo.innerHTML = sampleHTML;
   document.getElementById("infoSpecimen").parentNode.insertBefore(nwInfo, document.getElementById("infoSpecimen"));
+  let escapedCode = CSS.escape(package.itemCode)
+  ForDoms("#div_" + escapedCode, el => { el.style.cursor = "pointer"; el.setAttribute("onclick", "toggleMerge(this)"); el.setAttribute("itemCode", package.itemCode); el.setAttribute("index", index); });
 
-  ForDoms("#div_" + package.itemCode, el => { el.style.cursor = "pointer"; el.setAttribute("onclick", "toggleMerge(this)"); el.setAttribute("itemCode", package.itemCode); el.setAttribute("index", index); });
+  ForDoms(".freeUnitEnName_" + escapedCode + "_" + index, el => { el.style.display = "block"; });
+  ForDoms(".pbExtraWrapper_" + escapedCode + "_" + index, el => { el.style.display = "flow-root"; });
 
-  ForDoms(".freeUnitEnName_" + package.itemCode + "_" + index, el => { el.style.display = "block"; });
-  ForDoms(".pbExtraWrapper_" + package.itemCode + "_" + index, el => { el.style.display = "flow-root"; });
-
-  ForDoms(".freeUnitEnName_" + package.itemCode + "_" + index, el => { el.innerText = package.offeringName || package.itemCode; });
-  ForDoms(".initialTotalAmount_" + package.itemCode + "_" + index, el => { el.innerText = package.initialAmount; });
-  ForDoms(".measureUnitEnName_" + package.itemCode + "_" + index, el => { el.innerText = unitEnIds[package.measureUnit]; });
-  ForDoms(".usedAmount_" + package.itemCode + "_" + index, el => { el.innerText = package.usedAmount.toFixed(2); });
-  ForDoms(".usagePercentage_" + package.itemCode + "_" + index, el => { el.innerText = package.usagePercentage; });
-  ForDoms(".freeAmount_" + package.itemCode + "_" + index, el => { el.innerText = package.currentAmount; });
-  ForDoms(".remainingDaysForRenewal_" + package.itemCode + "_" + index, el => {
+  ForDoms(".freeUnitEnName_" + escapedCode + "_" + index, el => { el.innerText = package.offeringName || package.itemCode; });
+  ForDoms(".initialTotalAmount_" + escapedCode + "_" + index, el => { el.innerText = package.initialAmount; });
+  ForDoms(".measureUnitEnName_" + escapedCode + "_" + index, el => { el.innerText = unitEnIds[package.measureUnit]; });
+  ForDoms(".usedAmount_" + escapedCode + "_" + index, el => { el.innerText = package.usedAmount.toFixed(2); });
+  ForDoms(".usagePercentage_" + escapedCode + "_" + index, el => { el.innerText = package.usagePercentage; });
+  ForDoms(".freeAmount_" + escapedCode + "_" + index, el => { el.innerText = package.currentAmount; });
+  ForDoms(".remainingDaysForRenewal_" + escapedCode + "_" + index, el => {
     el.innerText = package.remainingDaysForRenewal + "d " + msToTime(diffToDaysAhead(package.remainingDaysForRenewal + 1));
   });
 
-  document.getElementById("progressbar_" + package.itemCode + "_" + index).style.width = package.usagePercentage + "%";
-  document.getElementById("progressbarValue_" + package.itemCode + "_" + index).innerText = package.usagePercentage + "%";
-  document.getElementById("progressbarValue_" + package.itemCode + "_" + index).style.left = "calc(" + package.usagePercentage + "% - 21px)";
+  document.getElementById("progressbar_" + escapedCode + "_" + index).style.width = package.usagePercentage + "%";
+  document.getElementById("progressbarValue_" + escapedCode + "_" + index).innerText = package.usagePercentage + "%";
+  document.getElementById("progressbarValue_" + escapedCode + "_" + index).style.left = "calc(" + package.usagePercentage + "% - 21px)";
 
   dnewInfo = new Date(new Date(package.expireTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
   doldInfo = new Date(new Date(package.effectiveTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
   dnowInfo = new Date().getTime();
   dpercentInfo = (dnowInfo - doldInfo) / (dnewInfo - doldInfo) * 100;
 
-  document.getElementById("progressbarDate_" + package.itemCode + "_" + index).style.width = dpercentInfo + "%";
-  document.getElementById("progressbarDateValue_" + package.itemCode + "_" + index).innerText = dpercentInfo.toFixed(2) + "%";
-  document.getElementById("progressbarDateValue_" + package.itemCode + "_" + index).style.left = "calc(" + dpercentInfo.toFixed(2) + "% - 21px)";
+  document.getElementById("progressbarDate_" + escapedCode + "_" + index).style.width = dpercentInfo + "%";
+  document.getElementById("progressbarDateValue_" + escapedCode + "_" + index).innerText = dpercentInfo.toFixed(2) + "%";
+  document.getElementById("progressbarDateValue_" + escapedCode + "_" + index).style.left = "calc(" + dpercentInfo.toFixed(2) + "% - 21px)";
 
   LogUsage(package)
   refreshOverAll()
@@ -586,7 +586,7 @@ function LogUsage(package, print){
 
 function RefreshInfo() {
 
-  C_TED_Primary_Fixed_Data = usageObj.body[0].freeUnitBeanDetailList.find(x => x.itemCode == "C_TED_Primary_Fixed_Data")
+  C_TED_Primary_Fixed_Data = usageObj.body[0].freeUnitBeanDetailList.sort((x, y) => y.initialAmount - x.initialAmount).find(x => x.itemCode == "C_TED_Primary_Fixed_Data")
   // repopulating old api properties for easier migration
   C_TED_Primary_Fixed_Data.usedAmount = C_TED_Primary_Fixed_Data.initialAmount - C_TED_Primary_Fixed_Data.currentAmount
   C_TED_Primary_Fixed_Data.usagePercentage = ((C_TED_Primary_Fixed_Data.usedAmount / C_TED_Primary_Fixed_Data.initialAmount) * 100).toFixed()
