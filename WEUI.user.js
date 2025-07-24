@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-07-14.0
+// @version      2025-07-24.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -569,15 +569,14 @@ function LogUsage(package, print){
     localStorage_setItem(savedLogName, JSON.stringify([]));
 
   var history = JSON.parse(cachedLocalStorage[savedLogName]);
-  if (history == null) return
+  if (!Array.isArray(history)) return
 
-  if (history.length > 0){
-    if (history[history.length - 1].key != package.usedAmount) {
-      if (history.length >= maxHistory && history.length > 0)
-        history.shift();
-      history.push({ key: package.usedAmount, value: dataDate.getTime() })
-      localStorage_setItem(savedLogName, JSON.stringify(history));
-    }
+  const isMaxHistory = history.length >= maxHistory && history.length > 0
+  const sameAmount = history[history.length - 1]?.key === package.usedAmount
+  if (!sameAmount) {
+    if (isMaxHistory) history.shift();
+    history.push({ key: package.usedAmount, value: dataDate.getTime() })
+    localStorage_setItem(savedLogName, JSON.stringify(history));
   }
 
   if (!print) return
