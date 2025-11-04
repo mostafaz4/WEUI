@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-11-04.3
+// @version      2025-11-04.4
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -741,7 +741,7 @@ drawDifferenceFromLastLoad = function () {
     id: `progressbar_${y.itemCode}_${index}`,
     x
   }))
-    //.toReversed()
+    .toReversed()
     .find(z => z.name === x.name), width: x.consumption}))
   oooo.forEach(x => x.sister_dom = x.name === "C_TED_Primary_Fixed_Data" ? document.querySelector(`#progressbar`) : document.querySelector(`#${x.id}`))
   oooo = oooo.filter(x => x.sister_dom)
