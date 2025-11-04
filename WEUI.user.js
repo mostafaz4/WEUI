@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-07-24.0
+// @version      2025-11-04.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -722,19 +722,20 @@ toggleMerge = function (elm) {
 }
 
 drawDifferenceFromLastLoad = function () {
+  let bundles_list = usageObj.body[0].freeUnitBeanDetailList.sort((a,b)=>b.effectiveTime - a.effectiveTime)
   let oooo = Object.keys(localStorage)
       .filter(x => x.startsWith("usageHistory-"+serviceNumber))
-      .map(x => JSON.parse(localStorage[x]).map(y=> ({name: usageObj.body[0].freeUnitBeanDetailList.find(z => x.endsWith(z.itemCode))?.itemCode, ...y}) ))
+      .map(x => JSON.parse(localStorage[x]).map(y=> ({name: bundles_list.find(z => x.endsWith(z.itemCode))?.itemCode, ...y}) ))
       .map(x => [x.at(-2)])
       .map(x => x.filter(Boolean).map(y => ({
         name: y.name,
         value: y.value,
-        obj: usageObj.body[0].freeUnitBeanDetailList.find(z => y.name === z.itemCode),
+        obj: bundles_list.find(z => y.name === z.itemCode),
         old: y.key})))
       .flat()
   oooo.forEach(x => {x.usagePercentage = x.obj?.usagePercentage; x.consumption = ((x.obj?.usedAmount - x.old) / x.obj?.initialAmount) * 100})
   oooo = oooo.filter(item => item.value === Math.max(...oooo.map(item => item.value)));
-  oooo = oooo.map(x => ({...usageObj.body[0].freeUnitBeanDetailList.map((y,index)=>({
+  oooo = oooo.map(x => ({...bundles_list.map((y,index)=>({
     name: y.itemCode,
     id: `progressbar_${y.itemCode}_${index}`,
     x
