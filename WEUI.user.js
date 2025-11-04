@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-11-04.6
+// @version      2025-11-04.7
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -559,7 +559,8 @@ function createInfoFor(package, index) {
   document.getElementById("progressbarDateValue_" + escapedCode + "_" + index).innerText = dpercentInfo.toFixed(2) + "%";
   document.getElementById("progressbarDateValue_" + escapedCode + "_" + index).style.left = "calc(" + dpercentInfo.toFixed(2) + "% - 21px)";
 
-  LogUsage(package)
+  if (package.currentAmount > 0)
+    LogUsage(package)
   refreshOverAll()
 }
 
