@@ -2,7 +2,7 @@
 // @name         WEUI
 // @version      2025-11-04.1
 // @namespace    https://github.com/mostafaz4/WEUI/
-// @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
+// @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
 // @author       Bondok
 // @match        https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1?*
