@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-11-04.0
+// @version      2025-11-04.1
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://github.com/mostafaz4/WEUI/raw/refs/heads/main/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -722,7 +722,7 @@ toggleMerge = function (elm) {
 }
 
 drawDifferenceFromLastLoad = function () {
-  let bundles_list = usageObj.body[0].freeUnitBeanDetailList.sort((a,b)=>b.effectiveTime - a.effectiveTime)
+  let bundles_list = usageObj.body[0].freeUnitBeanDetailList.toSorted((a,b)=>b.effectiveTime - a.effectiveTime)
   let oooo = Object.keys(localStorage)
       .filter(x => x.startsWith("usageHistory-"+serviceNumber))
       .map(x => JSON.parse(localStorage[x]).map(y=> ({name: bundles_list.find(z => x.endsWith(z.itemCode))?.itemCode, ...y}) ))
@@ -739,7 +739,7 @@ drawDifferenceFromLastLoad = function () {
     name: y.itemCode,
     id: `progressbar_${y.itemCode}_${index}`,
     x
-  })).find(z => z.name === x.name), width: x.consumption}))
+  })).toReversed().find(z => z.name === x.name), width: x.consumption}))
   oooo.forEach(x => x.sister_dom = x.name === "C_TED_Primary_Fixed_Data" ? document.querySelector(`#progressbar`) : document.querySelector(`#${x.id}`))
   oooo = oooo.filter(x => x.sister_dom)
   oooo.forEach(x => x.style_width = (((x.sister_dom.parentNode.clientWidth*(x.width/100)) / ((x.x.usagePercentage/100)*x.sister_dom.parentNode.clientWidth)) * 100))
