@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-11-04.4
+// @version      2025-11-04.5
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -384,6 +384,8 @@ function GetUsage() {
     //console.log("GetUsage json: " + xhr_usage.response);
     document.getElementById("rawUsageResponse").innerHTML = "<PRE>" + JSON.stringify(JSON.parse(xhr_usage.response), null, 4) + "</PRE>";
     usageObj = JSON.parse(xhr_usage.response);
+    //add extra_tm_index
+    usageObj?.body?.[0]?.freeUnitBeanDetailList?.toSorted((a,b)=>b.effectiveTime - a.effectiveTime)?.forEach((x, index)=> x.extra_tm_index = index)
     consoleLog(usageObj);
     //console.log(JSON.stringify(xhr_usage.response));
     GetBalance();
@@ -512,7 +514,8 @@ function refreshOverAll() {
 
 unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB" }
 
-function createInfoFor(package, index) {
+function createInfoFor(package) {
+  let index = package.extra_tm_index
   if (
     (package.itemCode === "C_TED_Primary_Fixed_Data" && C_TED_Primary_Fixed_Data?.offeringName === package.offeringName) ||
     document.querySelector(`.freeUnitEnName_${package.itemCode}_${index}`)
@@ -564,7 +567,7 @@ function createInfoFor(package, index) {
 }
 
 function LogUsage(package, print){
-  let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
+  let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}-${package.extra_tm_index}`
   if (cachedLocalStorage[savedLogName] === undefined)
     localStorage_setItem(savedLogName, JSON.stringify([]));
 
@@ -640,7 +643,7 @@ function RefreshInfo() {
 
   if (usageObj.body[0].freeUnitBeanDetailList.length <= 1) return;
 
-  usageObj.body[0].freeUnitBeanDetailList.forEach((x, index) => createInfoFor(x, index));
+  usageObj.body[0].freeUnitBeanDetailList.forEach(x => createInfoFor(x));
 }
 
 
@@ -668,7 +671,7 @@ window.clearHistory = (savedLogName) => {
 }
 function PrintUsageHistory(package){
   console.log(`Printing usage history for ${package.itemCode}`)
-  let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
+  let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}-${package.extra_tm_index}`
   document.querySelectorAll(".usageHistoryTable").forEach(child => child.parentNode.removeChild(child))
   document.body.appendChild(Object.assign(document.createElement('table'),{
     innerHTML:
