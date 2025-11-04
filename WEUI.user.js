@@ -740,7 +740,9 @@ drawDifferenceFromLastLoad = function () {
     name: y.itemCode,
     id: `progressbar_${y.itemCode}_${index}`,
     x
-  })).toReversed().find(z => z.name === x.name), width: x.consumption}))
+  }))
+    //.toReversed()
+    .find(z => z.name === x.name), width: x.consumption}))
   oooo.forEach(x => x.sister_dom = x.name === "C_TED_Primary_Fixed_Data" ? document.querySelector(`#progressbar`) : document.querySelector(`#${x.id}`))
   oooo = oooo.filter(x => x.sister_dom)
   oooo.forEach(x => x.style_width = (((x.sister_dom.parentNode.clientWidth*(x.width/100)) / ((x.x.usagePercentage/100)*x.sister_dom.parentNode.clientWidth)) * 100))
