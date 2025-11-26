@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-11-27.5
+// @version      2025-11-27.6
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -384,6 +384,11 @@ function GetUsage() {
     //console.log("GetUsage json: " + xhr_usage.response);
     document.getElementById("rawUsageResponse").innerHTML = "<PRE>" + JSON.stringify(JSON.parse(xhr_usage.response), null, 4) + "</PRE>";
     usageObj = JSON.parse(xhr_usage.response);
+    usageObj?.body?.[0]?.freeUnitBeanDetailList?.forEach(package=>{
+      package.usedAmount = package.initialAmount - package.currentAmount
+      package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
+    })
+  
     consoleLog(usageObj);
     //console.log(JSON.stringify(xhr_usage.response));
     GetBalance();
@@ -519,9 +524,6 @@ function createInfoFor(package, index) {
   ) return;
   if (package.itemCode === "C_TED_Primary_Fixed_Data" && C_TED_Primary_Fixed_Data?.offeringName !== package.offeringName)
     package.itemCode += "_" + package.offeringName.replace(/\s/g, "_")
-
-  package.usedAmount = package.initialAmount - package.currentAmount
-  package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
 
   sampleHTML = document.getElementById("infoSpecimen").innerHTML;
   sampleHTML = sampleHTML.replace(/{packageName}/g, "_" + package.itemCode + "_" + index);
