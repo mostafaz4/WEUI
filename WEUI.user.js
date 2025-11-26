@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-11-27.1
+// @version      2025-11-27.2
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -584,6 +584,40 @@ function LogUsage(package, print){
   PrintUsageHistory(package)
 }
 
+//filter out duplicated finished quotas
+function filterPackages(packages) {
+  // Group packages by itemCode
+  const groups = packages.reduce((acc, pkg) => {
+    (acc[pkg.itemCode] = acc[pkg.itemCode] || []).push(pkg);
+    return acc;
+  }, {});
+
+  const result = [];
+
+  for (const code in groups) {
+    const group = groups[code];
+
+    if (group.length === 1) {
+      // Only one package with that code → keep it
+      result.push(group[0]);
+      continue;
+    }
+
+    // More than one package → check remaining quota
+    const withQuota = group.filter(p => p.currentAmount > 0);
+
+    if (withQuota.length > 0) {
+      // Keep only packages that still have remaining quota
+      result.push(...withQuota);
+    } else {
+      // All are depleted → keep all packages
+      result.push(...group);
+    }
+  }
+
+  return result;
+}
+
 function RefreshInfo() {
 
   C_TED_Primary_Fixed_Data = usageObj.body[0].freeUnitBeanDetailList.sort((x, y) => y.initialAmount - x.initialAmount).find(x => x.itemCode == "C_TED_Primary_Fixed_Data")
@@ -641,16 +675,7 @@ function RefreshInfo() {
 
   if (usageObj.body[0].freeUnitBeanDetailList.length <= 1) return;
 
-  usageObj.body[0].freeUnitBeanDetailList
-  //filter out duplicate finished quotas
-  .filter(x=>{
-    x.usedAmount = x.initialAmount - x.currentAmount
-    if (x.initialAmount !== x.usedAmount) return true
-    if (x.itemCode === "C_TED_Primary_Fixed_Data") return true
-    let unfinished_item = usageObj.body[0].freeUnitBeanDetailList.find(y => y.itemCode === x.itemCode && x.initialAmount !== x.usedAmount)
-    if (unfinished_item) return x === unfinished_item
-    return false
-  }).forEach((x, index) => createInfoFor(x, index));
+  filterPackages(usageObj.body[0].freeUnitBeanDetailList).forEach((x, index) => createInfoFor(x, index));
 }
 
 
