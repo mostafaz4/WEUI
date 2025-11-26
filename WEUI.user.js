@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-11-27.4
+// @version      2025-11-27.5
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -645,10 +645,8 @@ function RefreshInfo() {
   //filter out duplicate finished quotas
   .filter(x=>{
     if (x.currentAmount > 0) return true
-    if (x.itemCode === "C_TED_Primary_Fixed_Data") return true
-    let unfinished_item = usageObj.body[0].freeUnitBeanDetailList.find(y => y.itemCode === x.itemCode && y.currentAmount > 0)
-    if (unfinished_item) return x === unfinished_item
-    return false
+    let same_with_quota = usageObj.body[0].freeUnitBeanDetailList.filter(y => y.itemCode === x.itemCode && y.currentAmount > 0)
+    return same_with_quota.length === 0
   }).forEach((x, index) => createInfoFor(x, index));
 }
 
