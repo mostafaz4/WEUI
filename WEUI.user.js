@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-11-27.6
+// @version      2025-11-27.7
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -752,7 +752,7 @@ drawDifferenceFromLastLoad = function () {
   }))
     .toReversed()
     .find(z => z.name === x.name), width: x.consumption}))
-  oooo.forEach(x => x.sister_dom = x.name === "C_TED_Primary_Fixed_Data" ? document.querySelector(`#progressbar`) : document.querySelector(`#${x.id}`))
+  oooo.forEach(x => x.sister_dom = x.name === "C_TED_Primary_Fixed_Data" ? document.querySelector(`#progressbar`) : document.querySelector(`[id*=${x.name}] .progressbar`))
   oooo = oooo.filter(x => x.sister_dom)
   oooo.forEach(x => x.style_width = (((x.sister_dom.parentNode.clientWidth*(x.width/100)) / ((x.x.usagePercentage/100)*x.sister_dom.parentNode.clientWidth)) * 100))
   oooo.forEach(x => x.sister_dom?.appendChild(Object.assign(document.createElement('div'), {
