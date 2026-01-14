@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-01-14.0
+// @version      2026-01-14.1
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -717,8 +717,8 @@ drawDifferenceFromLastLoad = function () {
         old: y.key})))
       .flat()
   oooo.forEach(x => {x.usagePercentage = x.obj?.usagePercentage; x.consumption = ((x.obj?.usedAmount - x.old) / x.obj?.initialAmount) * 100})
-  //what is this?
-  //oooo = oooo.filter(item => item.value === Math.max(...oooo.map(item => item.value)));
+  //see if this fixes only last changed?
+  oooo = oooo.filter(item => item.value === Math.max(...oooo.map(item => item.value)));
   oooo = oooo.map(x => ({...bundles_list.map((y,index)=>({
     name: y.itemCode,
     id: `progressbar_${y.itemCode}_${index}`,
