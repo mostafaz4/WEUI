@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2025-11-27.7
+// @version      2026-01-14.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -21,18 +21,9 @@ maxHistoryMobile = 4;
 //#endregion
 
 //#region write page html
-(function(){
-    document.write(`
 
-
-
-
-
-<script>var loginObj, usageObj, balanceObj, appVersionNo;</script>
-
-<title>WE Consumption details</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
+var title = "WE Consumption details"
+var style = `
 
   body {
     background-color: black;
@@ -201,10 +192,8 @@ maxHistoryMobile = 4;
   .good-light-green {
     color: lightgreen
   }
-
-</style>
-
-<div id="error"></div>
+`
+var html = `<div id="error"></div>
 <div id="rawUsageResponse" class="raw" style="margin-top: 100vh;"></div>
 <div id="rawBalanceResponse" class="raw"></div>
 <div id="info">
@@ -303,21 +292,21 @@ maxHistoryMobile = 4;
     </h4>
   </div>
 
-  <!--<button class="buttonRefresh" onclick="SmartGetUsage(serviceNumber);">Refresh</button>-->
   <div style="display: flex; position: absolute; pointer-events: none; font-size: 10px; margin-top: 25px; place-items: center; justify-self: anchor-center; gap: 50px;">
     <span style="color: gray; flex-grow: 1;" id="balance"></span>
     <span style="color: gray;" id="lastRefresh"></span>
   </div>
 
-</div>
+</div>`
 
-
-
-
-
-`)
+;(function(){
+  document.write(`<title>${title}</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>${style}</style>${html}`)
 }())
 //#endregion
+
+//#region initialize vars & params & maxHistory length
+
+var loginObj, usageObj, balanceObj, appVersionNo;
 
 // capture exceptions to be displayed on phones by alerts
 window.onerror = function (error, url, line) { alert(line + ": " + error); };
@@ -332,99 +321,92 @@ lastLoginTime = new Date(0)
 deviceid = generateRandomHexString(16)
 cachedLocalStorage = {...localStorage}
 
+unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB" }
+
+isMobile = false;
+if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) { document.body.style.background = 0; isMobile = true; }
+if (isMobile) maxHistory = maxHistoryMobile;
+
+//#endregion
+
+//#region helping functions
+
 function localStorage_setItem(key, string) { localStorage.setItem(key, string); cachedLocalStorage[key] = string; }
 function consoleLog(obj) { if (!log) return; console.log(obj); }
 function generateRandomHexString(length){ return [...Array(length)].map(() => Math.floor(Math.random() * 16).toString(16)).join('') }
-
-function prepare_xhr(xhr) {
-  xhr.withCredentials = true;
-  xhr.setRequestHeader('accept', "application/json, text/plain, */*")
-  xhr.setRequestHeader('csrftoken', loginObj?.body?.token ?? "")
-  xhr.setRequestHeader('languagecode', "en-US")
-  xhr.setRequestHeader('ismobile', "true")
-  xhr.setRequestHeader('iscoporate', "false")
-  xhr.setRequestHeader('isselfcare', "true")
-  xhr.setRequestHeader('channelid', "704")
-  xhr.setRequestHeader('delegatorsubsid', "")
-  xhr.setRequestHeader('deviceid', deviceid)
-  xhr.setRequestHeader('Content-Type', "application/json")
-  xhr.setRequestHeader('clienttype', "google")
-  xhr.setRequestHeader('appversionno', appVersionNo)
-}
-
-function Login() {
-  lastLoginTime = new Date();
-  xhr_login = new XMLHttpRequest();
-  xhr_login.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/auth/userAuthenticate');
-  prepare_xhr(xhr_login)
-
-  xhr_login.send(`{"acctId":"FBB${serviceNumber.replace(/^0+/, '')}","password":"${password}","appLocale":"en-US","isSelfcare":"Y","isMobile":"Y"}`);
-
-  xhr_login.onload = function () {
-    if (xhr_login.response.includes('"retCode":"0"')) {
-      loginObj = JSON.parse(xhr_login.response);
-      consoleLog(loginObj);
-      GetUsage();
-    } else {
-      console.log(xhr_login.response);
-      document.getElementById("error").innerHTML = "Error login!!";
-      consoleLog("Error loggining in!!");
-    }
-  };
-}
-
-function GetUsage() {
-  xhr_usage = new XMLHttpRequest();
-  xhr_usage.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/cbs/bb/queryFreeUnit');
-  prepare_xhr(xhr_usage)
-
-  xhr_usage.send(`{"subscriberId":"${loginObj.body.subscriber.subscriberId}"}`);
-
-  xhr_usage.onload = function () {
-    //console.log("GetUsage json: " + xhr_usage.response);
-    document.getElementById("rawUsageResponse").innerHTML = "<PRE>" + JSON.stringify(JSON.parse(xhr_usage.response), null, 4) + "</PRE>";
-    usageObj = JSON.parse(xhr_usage.response);
-    usageObj?.body?.[0]?.freeUnitBeanDetailList?.forEach(package=>{
-      package.usedAmount = package.initialAmount - package.currentAmount
-      package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
-    })
-  
-    consoleLog(usageObj);
-    //console.log(JSON.stringify(xhr_usage.response));
-    GetBalance();
-
-    RefreshInfo();
-    
-    drawDifferenceFromLastLoad();
-  };
-}
-
-function GetBalance() {
-  xhr_balance = new XMLHttpRequest();
-  xhr_balance.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cbs/ar/queryBalance');
-  prepare_xhr(xhr_balance)
-
-  xhr_balance.send(`{"acctId":"${loginObj.body.account.acctId}"}`);
-
-  xhr_balance.onload = function () {
-    //console.log("GetBalance json: " + xhr_balance.response);
-    document.getElementById("rawBalanceResponse").innerHTML = "<PRE>" + JSON.stringify(JSON.parse(xhr_balance.response), null, 4) + "</PRE>";
-    balanceObj = JSON.parse(xhr_balance.response);
-    consoleLog(usageObj);
-    //console.log(JSON.stringify(xhr_balance.response));
-
-    RefreshInfo();
-  };
-}
-
-
-
-
-
+function diffToDaysAhead(days) { return new Date(new Date().setHours((days * 24), 0, 0)) - new Date() }
+function ForDoms(selector, action) {  Array.from(document.querySelectorAll(selector)).forEach(action); }
 function formatedDate(date) {
   const time_str = date.toLocaleString('en-eg', { hour: "2-digit", minute: "2-digit", hour12: true })
   const date_str = date.toLocaleString('en-uk', { day: "2-digit", month: "short" })
   return `${date_str} ${time_str}`;
+}
+function msToTime(duration, leading_zero = false) {
+  let minutes = Math.floor((duration / (1000 * 60)) % 60)
+  let hours   = Math.floor((duration / (1000 * 60 * 60)) % 24);
+  if (leading_zero) {
+    hours = hours < 10 ? `0${hours}` : hours;
+    minutes = minutes < 10 ? `0${minutes}` : minutes;
+  }
+  return `${hours}h ${minutes}m`;
+}
+
+//#endregion
+
+//#region requests Login, GetUsage, GetBalance, getLatestAppVersionNumber, prepare_xhr
+
+async function Login() {
+  return new Promise(function (resolve, reject) {
+    lastLoginTime = new Date();
+    xhr_login = new XMLHttpRequest();
+    xhr_login.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/auth/userAuthenticate');
+    prepare_xhr(xhr_login)
+
+    xhr_login.send(
+      `{"acctId":"FBB${serviceNumber.replace(/^0+/, '')}","password":"${password}","appLocale":"en-US","isSelfcare":"Y","isMobile":"Y"}`
+    );
+
+    xhr_login.onload = function () {
+      resolve(xhr_login.response)
+    }
+    xhr_login.onerror = function () {
+      reject("Login xhr error");
+    };
+  })
+}
+
+async function GetUsage() {
+  return new Promise(function (resolve, reject) {
+    xhr_usage = new XMLHttpRequest();
+    xhr_usage.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/cbs/bb/queryFreeUnit');
+    prepare_xhr(xhr_usage)
+
+    xhr_usage.send(`{"subscriberId":"${loginObj.body.subscriber.subscriberId}"}`);
+
+    xhr_usage.onload = function () {
+      resolve(xhr_usage.response);
+    }
+    xhr_usage.onerror = function () {
+      reject("GetUsage xhr error");
+    }
+  })
+}
+
+async function GetBalance() {
+  return new Promise(function (resolve, reject) {
+    xhr_balance = new XMLHttpRequest();
+    xhr_balance.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cbs/ar/queryBalance');
+    prepare_xhr(xhr_balance)
+
+    xhr_balance.send(`{"acctId":"${loginObj.body.account.acctId}"}`);
+
+    xhr_balance.onload = function () {
+      resolve(xhr_balance.response);
+    }
+    xhr_balance.onerror = function () {
+      reject("GetBalance xhr error");
+    }
+  })
 }
 
 async function getLatestAppVersionNumber() {
@@ -445,31 +427,25 @@ async function getLatestAppVersionNumber() {
   })
 }
 
-async function SmartGetUsage() {
-  dataDate = new Date();
-  window.lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
-
-  usageObj, balanceObj = undefined;
-
-  //if (((new Date - lastLoginTime) / 1000 / 60) > 15)
-
-  appVersionNo = await getLatestAppVersionNumber()
-  Login();
+function prepare_xhr(xhr) {
+  xhr.withCredentials = true;
+  Object.entries({
+    accept: "application/json, text/plain, */*",
+    csrftoken: loginObj?.body?.token ?? "",
+    languagecode: "en-US",
+    ismobile: "true",
+    iscoporate: "false",
+    isselfcare: "true",
+    channelid: "704",
+    delegatorsubsid: "",
+    deviceid,
+    "Content-Type": "application/json",
+    clienttype: "google",
+    appversionno: appVersionNo
+  }).forEach(([k, v]) => xhr.setRequestHeader(k, v));
 }
 
-function msToTime(duration, leading_zero = false) {
-  let minutes = Math.floor((duration / (1000 * 60)) % 60)
-  let hours   = Math.floor((duration / (1000 * 60 * 60)) % 24);
-  if (leading_zero) {
-    hours = hours < 10 ? `0${hours}` : hours;
-    minutes = minutes < 10 ? `0${minutes}` : minutes;
-  }
-  return `${hours}h ${minutes}m`;
-}
-
-function diffToDaysAhead(days) { return new Date(new Date().setHours((days * 24), 0, 0)) - new Date() }
-
-function ForDoms(selector, action) {  Array.from(document.querySelectorAll(selector)).forEach(action); }
+//#endregion
 
 function refreshOverAll() {
   document.getElementById("overAll").style.display = "block";
@@ -514,8 +490,6 @@ function refreshOverAll() {
 
   });
 }
-
-unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB" }
 
 function createInfoFor(package, index) {
   if (
@@ -652,29 +626,8 @@ function RefreshInfo() {
   }).forEach((x, index) => createInfoFor(x, index));
 }
 
+//#region history: PrintUsageHistory, shouldShowHistory, toggleShowHistory, clearHistory
 
-isMobile = false;
-if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) { document.body.style.background = 0; isMobile = true; }
-if (isMobile) maxHistory = maxHistoryMobile;
-
-function showHistory() { return (localStorage.getItem("show_history") ?? 'true') === 'true'; }
-window.toggleShowHistory = () => {
-  if ((localStorage.getItem("show_history") ?? 'true') === 'true') {
-    localStorage.setItem("show_history", false)
-    document.querySelector(".usageHistoryTable").classList.add("d-none")
-    if (show_history_btn)
-      show_history_btn.innerHTML = "[ + ]"
-  } else {
-    localStorage.setItem("show_history", true)
-    document.querySelector(".usageHistoryTable").classList.remove("d-none")
-    if (show_history_btn)
-      show_history_btn.innerHTML = "[ - ]"
-  }
-}
-window.clearHistory = (savedLogName) => {
-  localStorage.removeItem(savedLogName);
-  document.querySelector(".usageHistoryTable tbody")?.replaceChildren(document.querySelector(".usageHistoryTable tbody")?.firstElementChild);
-}
 function PrintUsageHistory(package){
   console.log(`Printing usage history for ${package.itemCode}`)
   let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
@@ -682,14 +635,14 @@ function PrintUsageHistory(package){
   document.body.appendChild(Object.assign(document.createElement('table'),{
     innerHTML:
     `<tr><td colspan="3">
-    <a onclick="toggleShowHistory()" id="show_history_btn" style="float: left; cursor:pointer; user-select:none; margin-inline: 5px;"> ${showHistory() ? "[ - ]" : "[ + ]"} </a>
+    <a onclick="toggleShowHistory()" id="show_history_btn" style="float: left; cursor:pointer; user-select:none; margin-inline: 5px;"> ${shouldShowHistory() ? "[ - ]" : "[ + ]"} </a>
     <a onclick="if (confirm('Clear History?')) { clearHistory('${savedLogName}') }" style="float: left; cursor:pointer; user-select:none; text-decoration: underline;">[clear]</a>
     <span style="font-size: x-small;">${package.offeringName}</span>
     </td></tr>`,
     style: "position: absolute; top: 10px;",
     className: "usageHistoryTable"
   }));
-  if (!showHistory())
+  if (!shouldShowHistory())
     document.querySelector(".usageHistoryTable").classList.add("d-none")
   if (cachedLocalStorage[savedLogName] === undefined) {localStorage_setItem(savedLogName, JSON.stringify([])); }
   let dimGB = `<span class="dim">GB</span>`
@@ -707,7 +660,28 @@ function PrintUsageHistory(package){
   }
 }
 
-SmartGetUsage(serviceNumber);
+function shouldShowHistory() { return (localStorage.getItem("show_history") ?? 'true') === 'true'; }
+
+window.toggleShowHistory = () => {
+  if ((localStorage.getItem("show_history") ?? 'true') === 'true') {
+    localStorage.setItem("show_history", false)
+    document.querySelector(".usageHistoryTable").classList.add("d-none")
+    if (show_history_btn)
+      show_history_btn.innerHTML = "[ + ]"
+  } else {
+    localStorage.setItem("show_history", true)
+    document.querySelector(".usageHistoryTable").classList.remove("d-none")
+    if (show_history_btn)
+      show_history_btn.innerHTML = "[ - ]"
+  }
+}
+
+window.clearHistory = (savedLogName) => {
+  localStorage.removeItem(savedLogName);
+  document.querySelector(".usageHistoryTable tbody")?.replaceChildren(document.querySelector(".usageHistoryTable tbody")?.firstElementChild);
+}
+
+//#endregion
 
 toggleMerge = function (elm) {
   if (!elm.classList.toggle("dim")) { RefreshInfo(); PrintUsageHistory(C_TED_Primary_Fixed_Data); return; }
@@ -761,3 +735,44 @@ drawDifferenceFromLastLoad = function () {
     innerHTML: "&nbsp;"
   })))
 }
+
+async function Main() {
+  dataDate = new Date();
+  window.lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
+  loginObj, usageObj, balanceObj = undefined;
+  appVersionNo = await getLatestAppVersionNumber()
+
+  //#region Login
+  let login_res = await Login();
+  if (login_res.includes('"retCode":"0"')) {
+    loginObj = JSON.parse(login_res);
+    consoleLog(loginObj);
+  } else {
+    console.log("login_res", login_res);
+    error.innerHTML = "Error login!!";
+    console.log("Error loggining in! probably wrong credentials");
+  }
+  //#endregion
+
+  //#region GetUsage
+  let usage_res = await GetUsage()
+  rawUsageResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(usage_res), null, 4) + "</PRE>";
+  usageObj = JSON.parse(usage_res);
+  usageObj?.body?.[0]?.freeUnitBeanDetailList?.forEach(package=>{
+    package.usedAmount = package.initialAmount - package.currentAmount
+    package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
+  })
+  consoleLog(usageObj);
+  //#endregion
+  
+  //#region GetBalance
+  let balance_res = await GetBalance();
+  rawBalanceResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(balance_res), null, 4) + "</PRE>";
+  balanceObj = JSON.parse(balance_res);
+  consoleLog(balanceObj);
+  //#endregion
+
+  RefreshInfo();
+  drawDifferenceFromLastLoad();
+}
+Main();
