@@ -306,8 +306,6 @@ var html = `<div id="error"></div>
 
 //#region initialize vars & params & maxHistory length
 
-var loginObj, usageObj, balanceObj, appVersionNo;
-
 // capture exceptions to be displayed on phones by alerts
 window.onerror = function (error, url, line) { alert(line + ": " + error); };
 
@@ -705,41 +703,37 @@ toggleMerge = function (elm) {
 }
 
 drawDifferenceFromLastLoad = function () {
+  document.querySelectorAll(".drawedDiff").forEach(e=>e.parentNode.removeChild(e))
   let bundles_list = usageObj.body[0].freeUnitBeanDetailList.toSorted((a,b)=>b.effectiveTime - a.effectiveTime)
   let oooo = Object.keys(localStorage)
-      .filter(x => x.startsWith("usageHistory-"+serviceNumber))
-      .map(x => JSON.parse(localStorage[x]).map(y=> ({name: bundles_list.find(z => x.endsWith(z.itemCode))?.itemCode, ...y}) ))
-      .map(x => [x.at(-2)])
-      .map(x => x.filter(Boolean).map(y => ({
-        name: y.name,
-        value: y.value,
-        obj: bundles_list.find(z => y.name === z.itemCode),
-        old: y.key})))
-      .flat()
-  oooo.forEach(x => {x.usagePercentage = x.obj?.usagePercentage; x.consumption = ((x.obj?.usedAmount - x.old) / x.obj?.initialAmount) * 100})
-  //see if this fixes only last changed?
-  oooo = oooo.filter(item => item.value === Math.max(...oooo.map(item => item.value)));
-  oooo = oooo.map(x => ({...bundles_list.map((y,index)=>({
-    name: y.itemCode,
-    id: `progressbar_${y.itemCode}_${index}`,
-    x
-  }))
-    .toReversed()
-    .find(z => z.name === x.name), width: x.consumption}))
-  oooo.forEach(x => x.sister_dom = x.name === "C_TED_Primary_Fixed_Data" ? document.querySelector(`#progressbar`) : document.querySelector(`[id*=${x.name}] .progressbar`))
-  oooo = oooo.filter(x => x.sister_dom)
-  oooo.forEach(x => x.style_width = (((x.sister_dom.parentNode.clientWidth*(x.width/100)) / ((x.x.usagePercentage/100)*x.sister_dom.parentNode.clientWidth)) * 100))
-  oooo.forEach(x => x.sister_dom?.appendChild(Object.assign(document.createElement('div'), {
-    className: "progressbar",
-    style: `width: ${x.style_width > 100 ? 100 : x.style_width}%; background-color: rgb(220 30 255 / 56%); right: 0; display: inline;`,
-    innerHTML: "&nbsp;"
-  })))
+    .filter(k => k.startsWith(`usageHistory-${serviceNumber}`))
+    .map(x => JSON.parse(localStorage[x]).map(y=> ({obj: bundles_list.find(z => x.endsWith(z.itemCode)), ...y}) ))
+    .map(x => x.at(-2))
+    .filter(Boolean)
+  oooo = oooo
+    .filter(item => item.value === Math.max(...oooo.map(item => item.value)))
+    .map(y => ({
+      usagePercentage: y.obj?.usagePercentage,
+      width: ((y.obj?.usedAmount - y.key) / y.obj?.initialAmount) * 100,
+      sister_dom: document.querySelector(y.obj.itemCode === "C_TED_Primary_Fixed_Data" ? `#progressbar` : `[id*=${y.obj.itemCode}] .progressbar`),
+    }))
+    .filter(x => x?.sister_dom)
+  oooo.forEach(x => {
+    x.style_width = (((x.sister_dom.parentNode.clientWidth*(x.width/100)) / ((x.usagePercentage/100)*x.sister_dom.parentNode.clientWidth)) * 100)
+    x.sister_dom.appendChild(Object.assign(document.createElement('div'), {
+      className: "progressbar drawedDiff",
+      style: `width: ${x.style_width > 100 ? 100 : x.style_width}%; background-color: rgb(220 30 255 / 56%); right: 0; display: inline;`,
+      innerHTML: "&nbsp;"
+    }))
+  })
 }
 
 async function Main() {
   dataDate = new Date();
-  window.lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
-  loginObj, usageObj, balanceObj = undefined;
+  lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
+  loginObj   = undefined
+  usageObj   = undefined
+  balanceObj = undefined
   appVersionNo = await getLatestAppVersionNumber()
 
   //#region Login
