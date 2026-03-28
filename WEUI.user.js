@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-01-15.0
+// @version      2026-03-28.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
 // @author       Bondok
-// @match        https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1?*
+// @match        https://app-my.te.eg/echannel/service/WEUIInternet?*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @grant        none
 // ==/UserScript==
@@ -193,7 +193,7 @@ var style = `
     color: lightgreen
   }
 `
-var html = `<div id="error"></div>
+var html = `<html><div id="error"></div>
 <div id="rawUsageResponse" class="raw" style="margin-top: 100vh;"></div>
 <div id="rawBalanceResponse" class="raw"></div>
 <div id="info">
@@ -297,11 +297,10 @@ var html = `<div id="error"></div>
     <span style="color: gray;" id="lastRefresh"></span>
   </div>
 
-</div>`
+</div><html>`
 
-;(function(){
-  document.write(`<title>${title}</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>${style}</style>${html}`)
-}())
+document.head.parentNode.innerHTML = `<title>${title}</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>${style}</style>${html}`
+
 //#endregion
 
 //#region initialize vars & params & maxHistory length
@@ -310,7 +309,7 @@ var html = `<div id="error"></div>
 window.onerror = function (error, url, line) { alert(line + ": " + error); };
 
 serviceNumber = new URLSearchParams(window.location.search).get("serviceNumber")
-password = new URLSearchParams(window.location.search).get("password");
+password = new URLSearchParams(window.location.search).get("password")
 
 generatedToken = "";
 loginToken = "";
@@ -319,7 +318,7 @@ lastLoginTime = new Date(0)
 deviceid = generateRandomHexString(16)
 cachedLocalStorage = {...localStorage}
 
-unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB" }
+unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB", 1004: "min" }
 
 isMobile = false;
 if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) { document.body.style.background = 0; isMobile = true; }
@@ -373,13 +372,13 @@ async function Login() {
   })
 }
 
-async function GetUsage() {
+async function GetUsage(subscriberId) {
   return new Promise(function (resolve, reject) {
     xhr_usage = new XMLHttpRequest();
     xhr_usage.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/cbs/bb/queryFreeUnit');
     prepare_xhr(xhr_usage)
 
-    xhr_usage.send(`{"subscriberId":"${loginObj.body.subscriber.subscriberId}"}`);
+    xhr_usage.send(`{"subscriberId":"${subscriberId}"}`);
 
     xhr_usage.onload = function () {
       resolve(xhr_usage.response);
@@ -390,13 +389,13 @@ async function GetUsage() {
   })
 }
 
-async function GetBalance() {
+async function GetBalance(acctId) {
   return new Promise(function (resolve, reject) {
     xhr_balance = new XMLHttpRequest();
     xhr_balance.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cbs/ar/queryBalance');
     prepare_xhr(xhr_balance)
 
-    xhr_balance.send(`{"acctId":"${loginObj.body.account.acctId}"}`);
+    xhr_balance.send(`{"acctId":"${acctId}"}`);
 
     xhr_balance.onload = function () {
       resolve(xhr_balance.response);
@@ -425,7 +424,7 @@ async function getLatestAppVersionNumber() {
   })
 }
 
-function prepare_xhr(xhr) {
+prepare_xhr = function (xhr) {
   xhr.withCredentials = true;
   Object.entries({
     accept: "application/json, text/plain, */*",
@@ -445,6 +444,8 @@ function prepare_xhr(xhr) {
 
 //#endregion
 
+main_bundle_name = "C_TED_Primary_Fixed_Data"
+
 function refreshOverAll() {
   document.getElementById("overAll").style.display = "block";
   sumInitial = 0;
@@ -459,7 +460,7 @@ function refreshOverAll() {
   ForDoms(".pbExtraWrapper_overAll", el => { el.style.display = "flow-root"; });
 
   ForDoms(".initialTotalAmount_overAll", el => { el.innerText = sumInitial; });
-  ForDoms(".measureUnitEnName_overAll", el => { el.innerText = unitEnIds[C_TED_Primary_Fixed_Data.measureUnit]; });
+  ForDoms(".measureUnitEnName_overAll", el => { el.innerText = unitEnIds[main_bundle.measureUnit]; });
   ForDoms(".usedAmount_overAll", el => { el.innerText = sumUsed.toFixed(2); });
   ForDoms(".freeAmount_overAll", el => { el.innerText = (sumInitial - sumUsed.toFixed(2)).toFixed(2); });
   ForDoms(".usagePercentage_overAll", el => { el.innerText = sumUsagePercentage; });
@@ -491,10 +492,10 @@ function refreshOverAll() {
 
 function createInfoFor(package, index) {
   if (
-    (package.itemCode === "C_TED_Primary_Fixed_Data" && C_TED_Primary_Fixed_Data?.offeringName === package.offeringName) ||
+    (package.itemCode === main_bundle_name && main_bundle?.offeringName === package.offeringName) ||
     document.querySelector(`.freeUnitEnName_${package.itemCode}_${index}`)
   ) return;
-  if (package.itemCode === "C_TED_Primary_Fixed_Data" && C_TED_Primary_Fixed_Data?.offeringName !== package.offeringName)
+  if (package.itemCode === main_bundle_name && main_bundle?.offeringName !== package.offeringName)
     package.itemCode += "_" + package.offeringName.replace(/\s/g, "_")
 
   sampleHTML = document.getElementById("infoSpecimen").innerHTML;
@@ -560,47 +561,47 @@ function LogUsage(package, print){
 
 function RefreshInfo() {
 
-  C_TED_Primary_Fixed_Data = usageObj.body[0].freeUnitBeanDetailList.sort((x, y) => y.initialAmount - x.initialAmount).find(x => x.itemCode == "C_TED_Primary_Fixed_Data")
+  main_bundle = usageObj.body[0].freeUnitBeanDetailList.sort((x, y) => y.initialAmount - x.initialAmount).find(x => x.itemCode == main_bundle_name)
   // repopulating old api properties for easier migration
-  C_TED_Primary_Fixed_Data.usedAmount = C_TED_Primary_Fixed_Data.initialAmount - C_TED_Primary_Fixed_Data.currentAmount
-  C_TED_Primary_Fixed_Data.usagePercentage = ((C_TED_Primary_Fixed_Data.usedAmount / C_TED_Primary_Fixed_Data.initialAmount) * 100).toFixed()
+  main_bundle.usedAmount = main_bundle.initialAmount - main_bundle.currentAmount
+  main_bundle.usagePercentage = ((main_bundle.usedAmount / main_bundle.initialAmount) * 100).toFixed()
 
-  if (C_TED_Primary_Fixed_Data == undefined) {
+  if (main_bundle == undefined) {
     ForDoms(".freeUnitEnName", el => { el.innerHTML = "<h3>No Active Internet Bundle</h3>"; document.querySelector("#info").className = "nobundleView"; });
     ForDoms("#balance", el => { el.innerText = "💰 " + (balanceObj == undefined ? "loading..." : (balanceObj.body.balanceInfo[0].totalAmount / 10000).toFixed(2)) + " EGP" });
     return;
   }
 
-  dnew = new Date(new Date(C_TED_Primary_Fixed_Data.expireTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
-  dold = new Date(new Date(C_TED_Primary_Fixed_Data.effectiveTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
+  dnew = new Date(new Date(main_bundle.expireTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
+  dold = new Date(new Date(main_bundle.effectiveTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
   dnow = new Date().getTime();
   dpercent = (dnow - dold) / (dnew - dold) * 100;
 
-  remGB = C_TED_Primary_Fixed_Data.currentAmount;
-  remDays = C_TED_Primary_Fixed_Data.remainingDaysForRenewal + 1;
+  remGB = main_bundle.currentAmount;
+  remDays = main_bundle.remainingDaysForRenewal + 1;
   remDaysFrac = `${ remDays - 1 }d  ${msToTime(diffToDaysAhead(remDays))}`;
   compAvgUsage = (remGB / ((dnew - new Date()) / (1000 * 60 * 60 * 24))).toFixed(2);
   if ((dnew - new Date()) / (1000 * 60 * 60 * 24) < 1) compAvgUsage = remGB;
   ForDoms(".compAvgUsage", el => { el.innerText = compAvgUsage; });
 
-  document.getElementById("progressbar").style.width = C_TED_Primary_Fixed_Data.usagePercentage + "%";
-  document.getElementById("progressbarValue").innerText = C_TED_Primary_Fixed_Data.usagePercentage + "%";
-  document.getElementById("progressbarValue").style.left = "calc(" + C_TED_Primary_Fixed_Data.usagePercentage + "% - 21px)";
+  document.getElementById("progressbar").style.width = main_bundle.usagePercentage + "%";
+  document.getElementById("progressbarValue").innerText = main_bundle.usagePercentage + "%";
+  document.getElementById("progressbarValue").style.left = "calc(" + main_bundle.usagePercentage + "% - 21px)";
   document.getElementById("progressbarDate").style.width = dpercent + "%";
   document.getElementById("progressbarDateValue").innerText = dpercent.toFixed(2) + "%";
   document.getElementById("progressbarDateValue").style.left = "calc(" + dpercent.toFixed(2) + "% - 21px)";
   //document.getElementById("datePercentage").innerText = dpercent.toFixed(2);
 
-  oldusetimeperc = (dpercent - C_TED_Primary_Fixed_Data.usagePercentage).toFixed(2);
-  usetimeperc = (((0.01 * dpercent) * C_TED_Primary_Fixed_Data.initialAmount) - C_TED_Primary_Fixed_Data.usedAmount).toFixed(2);
+  oldusetimeperc = (dpercent - main_bundle.usagePercentage).toFixed(2);
+  usetimeperc = (((0.01 * dpercent) * main_bundle.initialAmount) - main_bundle.usedAmount).toFixed(2);
 
-  ForDoms(".freeUnitEnName", el => { el.innerText = C_TED_Primary_Fixed_Data.offeringName; });
-  ForDoms(".freeAmount", el => { el.innerText = C_TED_Primary_Fixed_Data.currentAmount; });
+  ForDoms(".freeUnitEnName", el => { el.innerText = main_bundle.offeringName; });
+  ForDoms(".freeAmount", el => { el.innerText = main_bundle.currentAmount; });
   ForDoms(".usetimepercentage", el => { el.innerText = usetimeperc; if (usetimeperc < 0) el.style.color = "red"; else el.style.color = "lightgreen"; });
-  ForDoms(".measureUnitEnName", el => { el.innerText = unitEnIds[C_TED_Primary_Fixed_Data.measureUnit]; });
-  ForDoms(".usedAmount", el => { el.innerText = C_TED_Primary_Fixed_Data.usedAmount.toFixed(2); });
-  ForDoms(".initialTotalAmount", el => { el.innerText = C_TED_Primary_Fixed_Data.initialAmount; });
-  ForDoms(".usagePercentage", el => { el.innerText = C_TED_Primary_Fixed_Data.usagePercentage; });
+  ForDoms(".measureUnitEnName", el => { el.innerText = unitEnIds[main_bundle.measureUnit]; });
+  ForDoms(".usedAmount", el => { el.innerText = main_bundle.usedAmount.toFixed(2); });
+  ForDoms(".initialTotalAmount", el => { el.innerText = main_bundle.initialAmount; });
+  ForDoms(".usagePercentage", el => { el.innerText = main_bundle.usagePercentage; });
   ForDoms(".renewalDate", el => { el.innerText = new Date(dnew).getFullYear() + "-" + (new Date(dnew).getMonth() + 1) + "-" + new Date(dnew).getDate(); });
   ForDoms(".subscriptionDate", el => { el.innerText = new Date(dold).getFullYear() + "-" + (new Date(dold).getMonth() + 1) + "-" + new Date(dold).getDate(); }); //C_TED_Primary_Fixed_Data.subscriptionDate;
   ForDoms(".remainingDaysForRenewal", el => { el.innerText = remDaysFrac; });
@@ -610,8 +611,8 @@ function RefreshInfo() {
   ForDoms(".pbExtraWrapper", el => { el.style.display = "none"; });
 
   // add to existing localStorage usageHistory
-  if (typeof C_TED_Primary_Fixed_Data != "undefined")
-    LogUsage(C_TED_Primary_Fixed_Data, true)
+  if (typeof main_bundle != "undefined")
+    LogUsage(main_bundle, true)
 
   if (usageObj.body[0].freeUnitBeanDetailList.length <= 1) return;
 
@@ -635,7 +636,7 @@ function PrintUsageHistory(package){
     `<tr><td colspan="3">
     <a onclick="toggleShowHistory()" id="show_history_btn" style="float: left; cursor:pointer; user-select:none; margin-inline: 5px;"> ${shouldShowHistory() ? "[ - ]" : "[ + ]"} </a>
     <a onclick="if (confirm('Clear History?')) { clearHistory('${savedLogName}') }" style="float: left; cursor:pointer; user-select:none; text-decoration: underline;">[clear]</a>
-    <span style="font-size: x-small;">${package.offeringName}</span>
+    <span style="font-size: x-small;" onclick="switchToLandline()">${package.offeringName}</span>
     </td></tr>`,
     style: "position: absolute; top: 10px;",
     className: "usageHistoryTable"
@@ -682,16 +683,16 @@ window.clearHistory = (savedLogName) => {
 //#endregion
 
 toggleMerge = function (elm) {
-  if (!elm.classList.toggle("dim")) { RefreshInfo(); PrintUsageHistory(C_TED_Primary_Fixed_Data); return; }
+  if (!elm.classList.toggle("dim")) { RefreshInfo(); PrintUsageHistory(main_bundle); return; }
 
   let itemcode = elm.getAttribute("itemcode") + "_" + elm.getAttribute("index");
   PrintUsageHistory(usageObj.body[0].freeUnitBeanDetailList.find(x => x.itemCode == elm.getAttribute("itemcode")))
   document.querySelector(".usedAmount").innerHTML = (parseFloat(document.querySelector(".usedAmount").innerText) + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText)).toFixed(2);
   document.querySelector(".initialTotalAmount").innerHTML = parseFloat(document.querySelector(".initialTotalAmount").innerText) + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText);
   document.querySelector(".freeAmount").innerHTML = Number((parseFloat(document.querySelector(".freeAmount").innerText) + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText)).toFixed(2));
-  let mergedUsedAmount = parseFloat(C_TED_Primary_Fixed_Data.usedAmount + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText));
-  let mergedFreeAmount = parseFloat(C_TED_Primary_Fixed_Data.currentAmount + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText));
-  let mergedInitialTotalAmount = parseFloat(C_TED_Primary_Fixed_Data.initialAmount + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText));
+  let mergedUsedAmount = parseFloat(main_bundle.usedAmount + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText));
+  let mergedFreeAmount = parseFloat(main_bundle.currentAmount + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText));
+  let mergedInitialTotalAmount = parseFloat(main_bundle.initialAmount + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText));
   let mergedUsagePercentage = Number((( mergedUsedAmount / mergedInitialTotalAmount ) * 100).toFixed(2));
 
   document.querySelector(".compAvgUsage").innerText = (mergedFreeAmount / ((dnew-new Date())/(1000*60*60*24))).toFixed(2);
@@ -715,7 +716,7 @@ drawDifferenceFromLastLoad = function () {
     .map(y => ({
       usagePercentage: y.obj?.usagePercentage,
       width: ((y.obj?.usedAmount - y.key) / y.obj?.initialAmount) * 100,
-      sister_dom: document.querySelector(y.obj.itemCode === "C_TED_Primary_Fixed_Data" ? `#progressbar` : `[id*=${y.obj.itemCode}] .progressbar`),
+      sister_dom: document.querySelector(y.obj.itemCode === main_bundle_name ? `#progressbar` : `[id*=${y.obj.itemCode}] .progressbar`),
     }))
     .filter(x => x?.sister_dom)
   oooo.forEach(x => {
@@ -749,7 +750,7 @@ async function Main() {
   //#endregion
 
   //#region GetUsage
-  let usage_res = await GetUsage()
+  let usage_res = await GetUsage(loginObj.body.subscriber.subscriberId)
   rawUsageResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(usage_res), null, 4) + "</PRE>";
   usageObj = JSON.parse(usage_res);
   usageObj?.body?.[0]?.freeUnitBeanDetailList?.forEach(package=>{
@@ -760,7 +761,7 @@ async function Main() {
   //#endregion
   
   //#region GetBalance
-  let balance_res = await GetBalance();
+  let balance_res = await GetBalance(loginObj.body.account.acctId);
   rawBalanceResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(balance_res), null, 4) + "</PRE>";
   balanceObj = JSON.parse(balance_res);
   consoleLog(balanceObj);
@@ -770,3 +771,121 @@ async function Main() {
   drawDifferenceFromLastLoad();
 }
 Main();
+
+getAssociatedLines = async function() {
+  return new Promise(function (resolve, reject) {
+    xhr_AssociatedLines = new XMLHttpRequest();
+    xhr_AssociatedLines.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/account/getAssociatedLines');
+    prepare_xhr(xhr_AssociatedLines)
+
+    xhr_AssociatedLines.send(`{"subscriberId":"${loginObj.body.subscriber.subscriberId}","serviceNumber":"${loginObj.body.loginId}"}`);
+
+    xhr_AssociatedLines.onload = function () {
+      resolve(xhr_AssociatedLines.response);
+    }
+    xhr_AssociatedLines.onerror = function () {
+      reject("getAssociatedLines xhr error");
+    }
+  })
+}
+
+landlineView = async function() {
+  let lines = await getAssociatedLines()
+
+}
+
+querySubscribers = async function(subscriberId) {
+  return new Promise(function (resolve, reject) {
+    xhr_querySubscribers = new XMLHttpRequest();
+    xhr_querySubscribers.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/customer/querySubscribers');
+    prepare_xhr(xhr_querySubscribers)
+
+    xhr_querySubscribers.send(`{"subscriberId":"${subscriberId}","pageSize":10,"startNum":0}`);
+
+    xhr_querySubscribers.onload = function () {
+      resolve(xhr_querySubscribers.response);
+    }
+    xhr_querySubscribers.onerror = function () {
+      reject("querySubscribers xhr error");
+    }
+  })
+}
+
+
+switchAccount = async function(serviceNumber) {
+  return new Promise(function (resolve, reject) {
+    let xhr_switchAccount = new XMLHttpRequest();
+    xhr_switchAccount.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/account/switchAccount');
+    prepare_xhr(xhr_switchAccount)
+
+    xhr_switchAccount.send(`{"subsId":"${loginObj.body.subscriber.subscriberId}","servNumber":"${serviceNumber}","channel":"702"}`);
+
+    xhr_switchAccount.onload = function () {
+      resolve(xhr_switchAccount.response);
+    }
+    xhr_switchAccount.onerror = function () {
+      reject("switchAccount xhr error");
+    }
+  })
+}
+
+
+switchToLandline = async function () {
+  if (main_bundle_name === "C_FV_Normal_VoiceI") {
+    location = location
+    return
+  }
+  main_bundle_name = "C_FV_Normal_VoiceI"
+  dataDate = new Date();
+  lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
+  usageObj   = undefined
+  balanceObj = undefined
+
+  let associatedLines = await getAssociatedLines()
+  associatedLinesObj = JSON.parse(associatedLines)
+  let subscriberId = associatedLinesObj.body.AssociatedNumbers.find(x => x.networkType == '4').subscriberId
+
+  //#region GetUsage
+  let usage_res = await GetUsage(subscriberId)
+  rawUsageResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(usage_res), null, 4) + "</PRE>";
+  usageObj = JSON.parse(usage_res);
+  usageObj?.body?.[0]?.freeUnitBeanDetailList?.forEach(package=>{
+    package.usedAmount = package.initialAmount - package.currentAmount
+    package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
+  })
+  consoleLog(usageObj);
+  //#endregion
+
+
+  let subscribers = await querySubscribers(subscriberId)
+  querySubscribersObj = JSON.parse(subscribers)
+  let subscriber = querySubscribersObj.body.subscriberList.find(x => x.subscriberId === subscriberId)
+  let acctId = subscriber.accountId
+  
+  let switchAccount_res = await switchAccount(subscriber.servNumber)
+  switchAccountObj = JSON.parse(switchAccount_res)
+  loginObj.body.token = switchAccountObj.body.token
+
+  //#region GetBalance
+  let balance_res = await GetBalance(acctId);
+  rawBalanceResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(balance_res), null, 4) + "</PRE>";
+  balanceObj = JSON.parse(balance_res);
+  consoleLog(balanceObj);
+  //#endregion
+
+  RefreshInfo();
+  drawDifferenceFromLastLoad();
+}
+
+
+
+
+function isConsoleOpen() {  
+  var startTime = new Date();
+  debugger;
+  var endTime = new Date();
+
+  return endTime - startTime > 100;
+}
+
+if (isConsoleOpen()) console.error("disabling cache corrupts this script, idk why...")
