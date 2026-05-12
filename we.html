@@ -1,7 +1,7 @@
 <!DOCTYPE html><html><head></head><script>
 // ==UserScript==
 // @name         WEUI
-// @version      2026-01-28.0
+// @version      2026-05-12.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -360,15 +360,32 @@ function msToTime(duration, leading_zero = false) {
 
 //#region requests Login, GetUsage, GetBalance, getLatestAppVersionNumber, prepare_xhr
 
+async function getCaptchaToken() {
+  const res = await fetch("https://captcha.te.eg/api/Captcha/GenerateCaptcha", {
+    method: 'POST',
+    referrerPolicy: 'no-referrer',
+    headers: {"content-type": "application/json; charset=utf-8"},
+    body: JSON.stringify({
+      "merchantName": "E-Care",
+      "serviceName": "Login",
+      "identifier": serviceNumber
+    })
+  })
+
+  const json = await res.json()
+  const token = json.token
+  return token
+}
+
 async function Login() {
-  return new Promise(function (resolve, reject) {
+  return new Promise(async function (resolve, reject) {
     lastLoginTime = new Date();
     xhr_login = new XMLHttpRequest();
     xhr_login.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/auth/userAuthenticate');
     prepare_xhr(xhr_login)
-
+    const captcha_token = await getCaptchaToken()
     xhr_login.send(
-      `{"acctId":"FBB${serviceNumber.replace(/^0+/, '')}","password":"${password}","appLocale":"en-US","isSelfcare":"Y","isMobile":"Y"}`
+      `{"acctId":"FBB${serviceNumber.replace(/^0+/, '')}","password":"${password}","appLocale":"en-US","isSelfcare":"Y","isMobile":"Y","imgCacheKey":"${captcha_token}"}`
     );
 
     xhr_login.onload = function () {
