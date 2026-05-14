@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-05-12.0
+// @version      2026-05-14.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -192,8 +192,30 @@ var style = `
   .good-light-green {
     color: lightgreen
   }
+
+  .captcha {
+    position: fixed;
+    width: 100%;
+    background-color: #0000006b;
+    height: 100%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .captcha div {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    padding: 25px;
+    background-color: #0c0c0c;
+    border-radius: 10px;
+    gap: 10px;
+  }
 `
-var html = `<html><div id="error"></div>
+var html = `<html><meta name="color-scheme" content="dark" /><div id="error"></div>
 <div id="rawUsageResponse" class="raw" style="margin-top: 100vh;"></div>
 <div id="rawBalanceResponse" class="raw"></div>
 <div id="info">
@@ -366,7 +388,15 @@ async function getCaptchaToken() {
 
   const json = await res.json()
   const token = json.token
-  return token
+  const required_captcha = json.requireInteraction
+  const image = json.captcha
+  return { token, image }
+}
+
+sendCaptcha = function () {
+  captcha_send_json.imgCode = captcha_solution.value
+  xhr_login.send(JSON.stringify(captcha_send_json))
+  Array.from(document.querySelectorAll(".captcha")).forEach(x=>x.parentNode.removeChild(x))
 }
 
 async function Login() {
@@ -376,9 +406,20 @@ async function Login() {
     xhr_login.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/auth/userAuthenticate');
     prepare_xhr(xhr_login)
     const captcha_token = await getCaptchaToken()
-    xhr_login.send(
-      `{"acctId":"FBB${serviceNumber.replace(/^0+/, '')}","password":"${password}","appLocale":"en-US","isSelfcare":"Y","isMobile":"Y","imgCacheKey":"${captcha_token}"}`
-    );
+    captcha_send_json = {
+      "acctId": `FBB${serviceNumber.replace(/^0+/, '')}`,
+      "password": password,
+      "appLocale": "en-US",
+      "isSelfcare": "Y",
+      "isMobile": "Y",
+      "imgCacheKey": captcha_token.token
+    }
+    if (captcha_token.image) {
+      document.body.appendChild(Object.assign(document.createElement('div'),{className: "captcha", innerHTML: `
+        <div><img src="${captcha_token.image}"><input type="text" id="captcha_solution"><button onclick="sendCaptcha()">submit</button></div>
+      `}))
+    } else
+      xhr_login.send(JSON.stringify(captcha_send_json));
 
     xhr_login.onload = function () {
       resolve(xhr_login.response)
@@ -387,6 +428,62 @@ async function Login() {
       reject("Login xhr error");
     };
   })
+}
+
+async function CheckCustomerChange() {
+  return new Promise(function (resolve, reject) {
+    xhr_CheckCustomerChange = new XMLHttpRequest();
+    xhr_CheckCustomerChange.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/auth/checkCustomerChange');
+    prepare_xhr(xhr_CheckCustomerChange)
+
+    xhr_CheckCustomerChange.send(`{"loginId":"${`FBB${serviceNumber.replace(/^0+/, '')}`}"}`);
+
+    xhr_CheckCustomerChange.onload = function () {
+      resolve(xhr_CheckCustomerChange.response);
+    }
+    xhr_CheckCustomerChange.onerror = function () {
+      reject("CheckCustomerChange xhr error");
+    }
+  })
+}
+async function RefreshAppToken() {
+  console.log("RefreshAppToken")
+  return new Promise(function (resolve, reject) {
+    xhr_RefreshAppToken = new XMLHttpRequest();
+    xhr_RefreshAppToken.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/common/refreshAppToken');
+    prepare_xhr(xhr_RefreshAppToken)
+    let number = `FBB${serviceNumber.replace(/^0+/, '')}`
+    const data = JSON.stringify({
+      "loginId": number,
+      "servNumber": number
+    })
+    xhr_RefreshAppToken.send(data);
+
+    xhr_RefreshAppToken.onload = function () {
+      resolve(xhr_RefreshAppToken.response);
+    }
+    xhr_RefreshAppToken.onerror = function () {
+      reject("RefreshAppToken xhr error");
+    }
+  })
+}
+async function GetUserRoleCz() {
+  return new Promise(function (resolve, reject) {
+    xhr_GetUserRoleCz = new XMLHttpRequest();
+    xhr_GetUserRoleCz.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/user/getUserRoleCz');
+    prepare_xhr(xhr_GetUserRoleCz)
+    xhr_GetUserRoleCz.send(null);
+
+    xhr_GetUserRoleCz.onload = function () {
+      resolve(xhr_GetUserRoleCz.response);
+    }
+    xhr_GetUserRoleCz.onerror = function () {
+      reject("GetUserRoleCz xhr error");
+    }
+  })
+}
+async function isLoggedIn() {
+  return JSON.parse(await GetUserRoleCz()).header.retCode === "0"
 }
 
 async function GetUsage(subscriberId) {
@@ -754,17 +851,21 @@ async function Main() {
   balanceObj = undefined
   appVersionNo = await getLatestAppVersionNumber()
 
-  //#region Login
-  let login_res = await Login();
-  if (login_res.includes('"retCode":"0"')) {
-    loginObj = JSON.parse(login_res);
-    consoleLog(loginObj);
-  } else {
-    console.log("login_res", login_res);
-    error.innerHTML = "Error login!!";
-    console.log("Error loggining in! probably wrong credentials");
+  if (!await isLoggedIn()) await RefreshAppToken()
+
+  if (!await isLoggedIn()) {
+    //#region Login
+    let login_res = await Login();
+    if (login_res.includes('"retCode":"0"')) {
+      loginObj = JSON.parse(login_res);
+      consoleLog(loginObj);
+    } else {
+      console.log("login_res", login_res);
+      error.innerHTML = "Error login!!";
+      console.log("Error loggining in! probably wrong credentials");
+    }
+    //#endregion
   }
-  //#endregion
 
   //#region GetUsage
   let usage_res = await GetUsage(loginObj.body.subscriber.subscriberId)
@@ -893,16 +994,3 @@ switchToLandline = async function () {
   RefreshInfo();
   drawDifferenceFromLastLoad();
 }
-
-
-
-
-function isConsoleOpen() {  
-  var startTime = new Date();
-  debugger;
-  var endTime = new Date();
-
-  return endTime - startTime > 100;
-}
-
-if (isConsoleOpen()) console.error("disabling cache corrupts this script, idk why...")
