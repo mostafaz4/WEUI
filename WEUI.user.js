@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-05-14.0
+// @version      2026-05-22.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -399,11 +399,13 @@ sendCaptcha = function () {
   Array.from(document.querySelectorAll(".captcha")).forEach(x=>x.parentNode.removeChild(x))
 }
 
+service_url = 'https://app-my.te.eg/echannel/service'
+
 async function Login() {
   return new Promise(async function (resolve, reject) {
     lastLoginTime = new Date();
     xhr_login = new XMLHttpRequest();
-    xhr_login.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/auth/userAuthenticate');
+    xhr_login.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
     prepare_xhr(xhr_login)
     const captcha_token = await getCaptchaToken()
     captcha_send_json = {
@@ -433,7 +435,7 @@ async function Login() {
 async function CheckCustomerChange() {
   return new Promise(function (resolve, reject) {
     xhr_CheckCustomerChange = new XMLHttpRequest();
-    xhr_CheckCustomerChange.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/auth/checkCustomerChange');
+    xhr_CheckCustomerChange.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/auth/checkCustomerChange`);
     prepare_xhr(xhr_CheckCustomerChange)
 
     xhr_CheckCustomerChange.send(`{"loginId":"${`FBB${serviceNumber.replace(/^0+/, '')}`}"}`);
@@ -450,7 +452,7 @@ async function RefreshAppToken() {
   console.log("RefreshAppToken")
   return new Promise(function (resolve, reject) {
     xhr_RefreshAppToken = new XMLHttpRequest();
-    xhr_RefreshAppToken.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/common/refreshAppToken');
+    xhr_RefreshAppToken.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/common/refreshAppToken`);
     prepare_xhr(xhr_RefreshAppToken)
     let number = `FBB${serviceNumber.replace(/^0+/, '')}`
     const data = JSON.stringify({
@@ -470,7 +472,7 @@ async function RefreshAppToken() {
 async function GetUserRoleCz() {
   return new Promise(function (resolve, reject) {
     xhr_GetUserRoleCz = new XMLHttpRequest();
-    xhr_GetUserRoleCz.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/user/getUserRoleCz');
+    xhr_GetUserRoleCz.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/user/getUserRoleCz`);
     prepare_xhr(xhr_GetUserRoleCz)
     xhr_GetUserRoleCz.send(null);
 
@@ -489,7 +491,7 @@ async function isLoggedIn() {
 async function GetUsage(subscriberId) {
   return new Promise(function (resolve, reject) {
     xhr_usage = new XMLHttpRequest();
-    xhr_usage.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/cbs/bb/queryFreeUnit');
+    xhr_usage.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/cbs/bb/queryFreeUnit`);
     prepare_xhr(xhr_usage)
 
     xhr_usage.send(`{"subscriberId":"${subscriberId}"}`);
@@ -506,7 +508,7 @@ async function GetUsage(subscriberId) {
 async function GetBalance(acctId) {
   return new Promise(function (resolve, reject) {
     xhr_balance = new XMLHttpRequest();
-    xhr_balance.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cbs/ar/queryBalance');
+    xhr_balance.open('POST', `${service_url}/besapp/base/rest/busiservice/cbs/ar/queryBalance`);
     prepare_xhr(xhr_balance)
 
     xhr_balance.send(`{"acctId":"${acctId}"}`);
@@ -524,7 +526,7 @@ async function getLatestAppVersionNumber() {
   return new Promise((resolve, reject) => {
     try {
       xhr_versionNo = new XMLHttpRequest();
-      xhr_versionNo.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/cms/getCzAppVersionList');
+      xhr_versionNo.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/cms/getCzAppVersionList`);
       xhr_versionNo.setRequestHeader('Content-Type', "application/json")
       xhr_versionNo.send(`{"versionType":"P","versionStatus":"R","appType":"Selfcare","osType":"google"}`);
       xhr_versionNo.onload = function (event) {
@@ -893,7 +895,7 @@ Main();
 getAssociatedLines = async function() {
   return new Promise(function (resolve, reject) {
     xhr_AssociatedLines = new XMLHttpRequest();
-    xhr_AssociatedLines.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/account/getAssociatedLines');
+    xhr_AssociatedLines.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/account/getAssociatedLines`);
     prepare_xhr(xhr_AssociatedLines)
 
     xhr_AssociatedLines.send(`{"subscriberId":"${loginObj.body.subscriber.subscriberId}","serviceNumber":"${loginObj.body.loginId}"}`);
@@ -915,7 +917,7 @@ landlineView = async function() {
 querySubscribers = async function(subscriberId) {
   return new Promise(function (resolve, reject) {
     xhr_querySubscribers = new XMLHttpRequest();
-    xhr_querySubscribers.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/cz/v1/customer/querySubscribers');
+    xhr_querySubscribers.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/customer/querySubscribers`);
     prepare_xhr(xhr_querySubscribers)
 
     xhr_querySubscribers.send(`{"subscriberId":"${subscriberId}","pageSize":10,"startNum":0}`);
@@ -933,7 +935,7 @@ querySubscribers = async function(subscriberId) {
 switchAccount = async function(serviceNumber) {
   return new Promise(function (resolve, reject) {
     let xhr_switchAccount = new XMLHttpRequest();
-    xhr_switchAccount.open('POST', 'https://app-my.te.eg/echannel/service/besapp/base/rest/busiservice/v1/account/switchAccount');
+    xhr_switchAccount.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/account/switchAccount`);
     prepare_xhr(xhr_switchAccount)
 
     xhr_switchAccount.send(`{"subsId":"${loginObj.body.subscriber.subscriberId}","servNumber":"${serviceNumber}","channel":"702"}`);
