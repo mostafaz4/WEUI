@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-05-22.1
+// @version      2026-05-22.2
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -399,10 +399,10 @@ sendCaptcha = function () {
   Array.from(document.querySelectorAll(".captcha")).forEach(x=>x.parentNode.removeChild(x))
 }
 
-service_host = 'app-my.te.eg'
-service_url = `https://${service_host}/echannel/service`
 proxy_host = 'we-auth.mostafab2010.workers.dev'
 proxy_url = `https://${proxy_host}/echannel/service`
+service_host = 'app-my.te.eg'
+service_url = proxy_url//`https://${service_host}/echannel/service`
 
 async function Login() {
   return new Promise(async function (resolve, reject) {
