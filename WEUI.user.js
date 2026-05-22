@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-05-22.0
+// @version      2026-05-22.1
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -399,13 +399,16 @@ sendCaptcha = function () {
   Array.from(document.querySelectorAll(".captcha")).forEach(x=>x.parentNode.removeChild(x))
 }
 
-service_url = 'https://app-my.te.eg/echannel/service'
+service_host = 'app-my.te.eg'
+service_url = `https://${service_host}/echannel/service`
+proxy_host = 'we-auth.mostafab2010.workers.dev'
+proxy_url = `https://${proxy_host}/echannel/service`
 
 async function Login() {
   return new Promise(async function (resolve, reject) {
     lastLoginTime = new Date();
     xhr_login = new XMLHttpRequest();
-    xhr_login.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
+    xhr_login.open('POST', `${proxy_url}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
     prepare_xhr(xhr_login)
     const captcha_token = await getCaptchaToken()
     captcha_send_json = {
@@ -452,7 +455,7 @@ async function RefreshAppToken() {
   console.log("RefreshAppToken")
   return new Promise(function (resolve, reject) {
     xhr_RefreshAppToken = new XMLHttpRequest();
-    xhr_RefreshAppToken.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/common/refreshAppToken`);
+    xhr_RefreshAppToken.open('POST', `${proxy_url}/besapp/base/rest/busiservice/cz/v1/common/refreshAppToken`);
     prepare_xhr(xhr_RefreshAppToken)
     let number = `FBB${serviceNumber.replace(/^0+/, '')}`
     const data = JSON.stringify({
