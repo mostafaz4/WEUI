@@ -1,4 +1,3 @@
-<!DOCTYPE html><html><head></head><script>
 // ==UserScript==
 // @name         WEUI
 // @version      2026-05-26.0
@@ -1039,4 +1038,3 @@ switchToLandline = async function () {
   RefreshInfo();
   drawDifferenceFromLastLoad();
 }
-</script><html>

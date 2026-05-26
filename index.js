@@ -12,6 +12,5 @@ let no_user_or_pass = `if (!serviceNumber || !password){
 }`
 script = script.replace(/password = .*/, `password = localStorage.getItem("password");\n\n${no_user_or_pass}`)
 
-let final = `<!DOCTYPE html><html><head></head><script>\n${script}\n</script><html>`
-fs.writeFileSync("we.html", final)
-fs.writeFileSync("d:\\Programming\\Android\\utilities\\elnet\\app\\src\\main\\res\\raw\\we.html", final)
+fs.writeFileSync("we.js", script)
+fs.writeFileSync("d:\\Programming\\Android\\utilities\\elnet\\app\\src\\main\\res\\raw\\we.js", script)
