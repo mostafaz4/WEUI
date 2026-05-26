@@ -442,7 +442,7 @@ async function Login() {
       xhr_login.send(JSON.stringify(captcha_send_json));
 
     xhr_login.onload = function () {
-      const cookie_obj = document.cookie.split(";").reduce((acc,curr)=>{acc[curr.split('=')[0].trim()] = curr.split('=')[1].trim(); return acc}, {})
+      const cookie_obj = document.cookie.split(";").reduce((acc,curr)=>{const split = curr.split('='); if (curr.length < 1 || split.length < 2) return acc; acc[split[0].trim()] = split[1]?.trim(); return acc}, {})
       localStorage.setItem(`${serviceNumber}_headers`, JSON.stringify([
         {key: "csrftoken", value: JSON.parse(xhr_login.response)?.body?.token ?? ""},
         {key: "indiv_login_token", value: cookie_obj.indiv_login_token},
@@ -487,7 +487,7 @@ async function RefreshAppToken() {
     xhr_RefreshAppToken.send(data);
 
     xhr_RefreshAppToken.onload = function () {
-      const cookie_obj = document.cookie.split(";").reduce((acc,curr)=>{acc[curr.split('=')[0].trim()] = curr.split('=')[1].trim(); return acc}, {})
+      const cookie_obj = document.cookie.split(";").reduce((acc,curr)=>{const split = curr.split('='); if (curr.length < 1 || split.length < 2) return acc; acc[split[0].trim()] = split[1]?.trim(); return acc}, {})
       localStorage.setItem(`${serviceNumber}_headers`, JSON.stringify([
         {key: "csrftoken", value: JSON.parse(xhr_RefreshAppToken.response)?.body?.token ?? "" },
         {key: "indiv_login_token", value: cookie_obj.indiv_login_token},
