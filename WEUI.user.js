@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-05-22.3
+// @version      2026-05-26.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -337,7 +337,16 @@ generatedToken = "";
 loginToken = "";
 log = false;
 lastLoginTime = new Date(0)
+
 deviceid = generateRandomHexString(16)
+stored_deviceid = localStorage.getItem(`${serviceNumber}_deviceid`)
+if (serviceNumber.trim().length > 0) {
+  if (stored_deviceid)
+    deviceid = stored_deviceid
+  else
+    localStorage.setItem(`${serviceNumber}_deviceid`, deviceid)
+}
+
 cachedLocalStorage = {...localStorage}
 
 unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB", 1004: "min" }
@@ -399,7 +408,8 @@ sendCaptcha = function () {
   Array.from(document.querySelectorAll(".captcha")).forEach(x=>x.parentNode.removeChild(x))
 }
 
-service_url = 'https://app-my.te.eg/echannel/service'
+host = "we-auth.mostafab2010.workers.dev"
+service_url = `https://${host}/echannel/service`
 
 async function Login() {
   return new Promise(async function (resolve, reject) {
@@ -424,6 +434,13 @@ async function Login() {
       xhr_login.send(JSON.stringify(captcha_send_json));
 
     xhr_login.onload = function () {
+      const cookie_obj = document.cookie.split(";").reduce((acc,curr)=>{acc[curr.split('=')[0].trim()] = curr.split('=')[1].trim(); return acc}, {})
+      localStorage.setItem(`${serviceNumber}_headers`, JSON.stringify([
+        {key: "csrftoken", value: JSON.parse(xhr_login.response)?.body?.token ?? ""},
+        {key: "indiv_login_token", value: cookie_obj.indiv_login_token},
+        {key: "refresh_token", value: cookie_obj.refresh_token}
+      ]))
+
       resolve(xhr_login.response)
     }
     xhr_login.onerror = function () {
@@ -462,6 +479,13 @@ async function RefreshAppToken() {
     xhr_RefreshAppToken.send(data);
 
     xhr_RefreshAppToken.onload = function () {
+      const cookie_obj = document.cookie.split(";").reduce((acc,curr)=>{acc[curr.split('=')[0].trim()] = curr.split('=')[1].trim(); return acc}, {})
+      localStorage.setItem(`${serviceNumber}_headers`, JSON.stringify([
+        {key: "csrftoken", value: JSON.parse(xhr_RefreshAppToken.response)?.body?.token ?? "" },
+        {key: "indiv_login_token", value: cookie_obj.indiv_login_token},
+        {key: "refresh_token", value: cookie_obj.refresh_token}
+      ]))
+
       resolve(xhr_RefreshAppToken.response);
     }
     xhr_RefreshAppToken.onerror = function () {
@@ -542,20 +566,30 @@ async function getLatestAppVersionNumber() {
 
 prepare_xhr = function (xhr) {
   xhr.withCredentials = true;
-  Object.entries({
+  const headers = {
     accept: "application/json, text/plain, */*",
-    csrftoken: loginObj?.body?.token ?? "",
     languagecode: "en-US",
     ismobile: "true",
     iscoporate: "false",
     isselfcare: "true",
     channelid: "704",
     delegatorsubsid: "",
+    systemtype: "android",
     deviceid,
     "Content-Type": "application/json",
     clienttype: "google",
     appversionno: appVersionNo
-  }).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+  }
+  if (loginObj?.body?.token)
+    headers.csrftoken = loginObj.body.token
+  const extra_headers = localStorage.getItem(`${serviceNumber}_headers`)
+  if (extra_headers !== null) {
+    const extra_headers_array = JSON.parse(extra_headers)
+    extra_headers_array.forEach(x => headers[x.key] = x.value)
+    if (headers.refresh_token)
+      headers.mrefresh_token = headers.refresh_token
+  }
+  Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
 }
 
 //#endregion
@@ -848,7 +882,7 @@ drawDifferenceFromLastLoad = function () {
 async function Main() {
   dataDate = new Date();
   lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
-  loginObj   = undefined
+  loginObj   = JSON.parse(localStorage.getItem(`${serviceNumber}_loginObj`)) ?? undefined
   usageObj   = undefined
   balanceObj = undefined
   appVersionNo = await getLatestAppVersionNumber()
@@ -859,6 +893,7 @@ async function Main() {
     //#region Login
     let login_res = await Login();
     if (login_res.includes('"retCode":"0"')) {
+      localStorage.setItem(`${serviceNumber}_loginObj`, login_res)
       loginObj = JSON.parse(login_res);
       consoleLog(loginObj);
     } else {
