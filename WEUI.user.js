@@ -5,7 +5,7 @@
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
 // @author       Bondok
-// @match        https://app-my.te.eg/echannel/service/WEUIInternet?*
+// @match        https://we-auth.mostafab2010.workers.dev/echannel/service/WEUIInternet?*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @grant        none
 // ==/UserScript==
