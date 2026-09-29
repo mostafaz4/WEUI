@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-05-26.0
+// @version      2026-09-29.0
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -15,8 +15,8 @@ window.stop();
 
 //#region parameters
 
-maxHistory = 35;
-maxHistoryMobile = 4;
+let maxHistory = 35;
+const maxHistoryMobile = 4;
 
 //#endregion
 
@@ -328,39 +328,53 @@ document.head.parentNode.innerHTML = `<title>${title}</title><meta name="viewpor
 //#region initialize vars & params & maxHistory length
 
 // capture exceptions to be displayed on phones by alerts
-window.onerror = function (error, url, line) { alert(line + ": " + error); };
+window.onerror = function (error, _url, line) { console.error(line + ": " + error); const err = document.getElementById("error"); if (err) err.textContent = line + ": " + error; };
 
-serviceNumber = new URLSearchParams(window.location.search).get("serviceNumber")
-password = new URLSearchParams(window.location.search).get("password")
+//__CREDENTIALS:QUERY__
+let serviceNumber = new URLSearchParams(window.location.search).get("serviceNumber");
+let password = new URLSearchParams(window.location.search).get("password");
+//__END_CREDENTIALS__
 
-generatedToken = "";
-loginToken = "";
-log = false;
-lastLoginTime = new Date(0)
-
-deviceid = generateRandomHexString(16)
-stored_deviceid = localStorage.getItem(`${serviceNumber}_deviceid`)
-if (serviceNumber.trim().length > 0) {
+let deviceid = generateRandomHexString(16);
+const stored_deviceid = localStorage.getItem(`${serviceNumber}_deviceid`);
+if ((serviceNumber || "").trim().length > 0) {
   if (stored_deviceid)
-    deviceid = stored_deviceid
+    deviceid = stored_deviceid;
   else
-    localStorage.setItem(`${serviceNumber}_deviceid`, deviceid)
+    localStorage.setItem(`${serviceNumber}_deviceid`, deviceid);
 }
 
-cachedLocalStorage = {...localStorage}
+// (removed: cachedLocalStorage mirror — it went stale after clearHistory/removeItem; read localStorage directly)
 
-unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB", 1004: "min" }
+const unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB", 1004: "min" };
 
-isMobile = false;
+let isMobile = false;
 if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) { document.body.style.background = 0; isMobile = true; }
 if (isMobile) maxHistory = maxHistoryMobile;
+
+// Shared runtime state (explicit lets; these were implicit globals before).
+let loginObj, usageObj, balanceObj, appVersionNo, dataDate;
+let main_bundle, main_bundle_name = "C_TED_Primary_Fixed_Data";
+let dnew, dold, dnow, dpercent;
+let remGB, remDays, remDaysFrac, compAvgUsage, usetimeperc;
+let sumInitial, sumUsed, sumUsagePercentage;
+let dnewInfo, doldInfo, dnowInfo, dpercentInfo;
+let xhr_login, captcha_send_json;
 
 //#endregion
 
 //#region helping functions
 
-function localStorage_setItem(key, string) { localStorage.setItem(key, string); cachedLocalStorage[key] = string; }
-function consoleLog(obj) { if (!log) return; console.log(obj); }
+function loadHistory(savedLogName) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(savedLogName) ?? "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+function saveHistory(savedLogName, history) { localStorage.setItem(savedLogName, JSON.stringify(history)); }
+function consoleLog() { /* verbose logging disabled; use console.log directly when debugging */ }
 function generateRandomHexString(length){ return [...Array(length)].map(() => Math.floor(Math.random() * 16).toString(16)).join('') }
 function diffToDaysAhead(days) { return new Date(new Date().setHours((days * 24), 0, 0)) - new Date() }
 function ForDoms(selector, action) {  Array.from(document.querySelectorAll(selector)).forEach(action); }
@@ -396,29 +410,22 @@ async function getCaptchaToken() {
   })
 
   const json = await res.json()
-  const token = json.token
-  const required_captcha = json.requireInteraction
-  const image = json.captcha
-  return { token, image }
+  return { token: json.token, image: json.captcha }
 }
 
-sendCaptcha = function () {
+function sendCaptcha() {
   captcha_send_json.imgCode = captcha_solution.value
   xhr_login.send(JSON.stringify(captcha_send_json))
   Array.from(document.querySelectorAll(".captcha")).forEach(x=>x.parentNode.removeChild(x))
 }
 
-host = "we-auth.mostafab2010.workers.dev"
-service_url = `https://${host}/echannel/service`
+const host = "we-auth.mostafab2010.workers.dev"
+const service_url = `https://${host}/echannel/service`
 
 async function Login() {
-  return new Promise(async function (resolve, reject) {
-    lastLoginTime = new Date();
-    xhr_login = new XMLHttpRequest();
-    xhr_login.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
-    prepare_xhr(xhr_login)
-    const captcha_token = await getCaptchaToken()
-    captcha_send_json = {
+  // NOTE: keeps raw XHR (not postAPI) because the captcha flow defers .send() until user input.
+  const captcha_token = await getCaptchaToken();
+  captcha_send_json = {
       "acctId": `FBB${serviceNumber.replace(/^0+/, '')}`,
       "password": password,
       "appLocale": "en-US",
@@ -430,141 +437,123 @@ async function Login() {
       document.body.appendChild(Object.assign(document.createElement('div'),{className: "captcha", innerHTML: `
         <div><img src="${captcha_token.image}"><input type="text" id="captcha_solution"><button onclick="sendCaptcha()">submit</button></div>
       `}))
-    } else
-      xhr_login.send(JSON.stringify(captcha_send_json));
-
-    xhr_login.onload = function () {
-      const cookie_obj = document.cookie.split(";").reduce((acc,curr)=>{const split = curr.split('='); if (curr.length < 1 || split.length < 2) return acc; acc[split[0].trim()] = split[1]?.trim(); return acc}, {})
-      localStorage.setItem(`${serviceNumber}_headers`, JSON.stringify([
-        {key: "csrftoken", value: JSON.parse(xhr_login.response)?.body?.token ?? ""},
-        {key: "indiv_login_token", value: cookie_obj.indiv_login_token},
-        {key: "refresh_token", value: cookie_obj.refresh_token}
-      ]))
-
-      resolve(xhr_login.response)
+      return new Promise(function (resolve, reject) {
+        xhr_login = new XMLHttpRequest();
+        xhr_login.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
+        prepare_xhr(xhr_login);
+        xhr_login.onload = function () {
+          saveAuthHeaders(xhr_login.response);
+          resolve(xhr_login.response);
+        };
+        xhr_login.onerror = function () { reject(new Error("Login xhr error")); };
+      });
     }
-    xhr_login.onerror = function () {
-      reject("Login xhr error");
-    };
-  })
+    xhr_login = new XMLHttpRequest();
+    xhr_login.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
+    prepare_xhr(xhr_login);
+    return new Promise(function (resolve, reject) {
+      xhr_login.onload = function () {
+        saveAuthHeaders(xhr_login.response);
+        resolve(xhr_login.response);
+      };
+      xhr_login.onerror = function () { reject(new Error("Login xhr error")); };
+      xhr_login.send(JSON.stringify(captcha_send_json));
+    });
 }
 
-async function CheckCustomerChange() {
+function parseAuthCookies() {
+  return document.cookie.split(";").reduce((acc, curr) => {
+    const split = curr.split('=');
+    if (curr.length < 1 || split.length < 2) return acc;
+    acc[split[0].trim()] = split[1]?.trim();
+    return acc;
+  }, {});
+}
+
+function safeParse(text, fallback) {
+  try { return JSON.parse(text); } catch (e) { return fallback; }
+}
+
+function saveAuthHeaders(responseText) {
+  const cookie_obj = parseAuthCookies();
+  localStorage.setItem(`${serviceNumber}_headers`, JSON.stringify([
+    { key: "csrftoken", value: safeParse(responseText, {})?.body?.token ?? "" },
+    { key: "indiv_login_token", value: cookie_obj.indiv_login_token },
+    { key: "refresh_token", value: cookie_obj.refresh_token }
+  ]));
+}
+
+// Single XHR helper: every API call goes through here (was: 9 copy-pasted wrappers).
+function postAPI(path, body) {
   return new Promise(function (resolve, reject) {
-    xhr_CheckCustomerChange = new XMLHttpRequest();
-    xhr_CheckCustomerChange.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/auth/checkCustomerChange`);
-    prepare_xhr(xhr_CheckCustomerChange)
-
-    xhr_CheckCustomerChange.send(`{"loginId":"${`FBB${serviceNumber.replace(/^0+/, '')}`}"}`);
-
-    xhr_CheckCustomerChange.onload = function () {
-      resolve(xhr_CheckCustomerChange.response);
-    }
-    xhr_CheckCustomerChange.onerror = function () {
-      reject("CheckCustomerChange xhr error");
-    }
-  })
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${service_url}${path}`);
+    prepare_xhr(xhr);
+    xhr.onload = function () { resolve(xhr.response); };
+    xhr.onerror = function () { reject(new Error(`POST ${path} failed`)); };
+    xhr.send(body == null ? null : (typeof body === "string" ? body : JSON.stringify(body)));
+  });
 }
 async function RefreshAppToken() {
-  console.log("RefreshAppToken")
-  return new Promise(function (resolve, reject) {
-    xhr_RefreshAppToken = new XMLHttpRequest();
-    xhr_RefreshAppToken.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/common/refreshAppToken`);
-    prepare_xhr(xhr_RefreshAppToken)
-    let number = `FBB${serviceNumber.replace(/^0+/, '')}`
-    const data = JSON.stringify({
-      "loginId": number,
-      "servNumber": number
-    })
-    xhr_RefreshAppToken.send(data);
-
-    xhr_RefreshAppToken.onload = function () {
-      const cookie_obj = document.cookie.split(";").reduce((acc,curr)=>{const split = curr.split('='); if (curr.length < 1 || split.length < 2) return acc; acc[split[0].trim()] = split[1]?.trim(); return acc}, {})
-      localStorage.setItem(`${serviceNumber}_headers`, JSON.stringify([
-        {key: "csrftoken", value: JSON.parse(xhr_RefreshAppToken.response)?.body?.token ?? "" },
-        {key: "indiv_login_token", value: cookie_obj.indiv_login_token},
-        {key: "refresh_token", value: cookie_obj.refresh_token}
-      ]))
-
-      resolve(xhr_RefreshAppToken.response);
-    }
-    xhr_RefreshAppToken.onerror = function () {
-      reject("RefreshAppToken xhr error");
-    }
-  })
+  const number = `FBB${serviceNumber.replace(/^0+/, '')}`;
+  const res = await postAPI("/besapp/base/rest/busiservice/cz/v1/common/refreshAppToken", {
+    "loginId": number,
+    "servNumber": number
+  });
+  saveAuthHeaders(res);
+  return res;
 }
 async function GetUserRoleCz() {
-  return new Promise(function (resolve, reject) {
-    xhr_GetUserRoleCz = new XMLHttpRequest();
-    xhr_GetUserRoleCz.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/user/getUserRoleCz`);
-    prepare_xhr(xhr_GetUserRoleCz)
-    xhr_GetUserRoleCz.send(null);
-
-    xhr_GetUserRoleCz.onload = function () {
-      resolve(xhr_GetUserRoleCz.response);
-    }
-    xhr_GetUserRoleCz.onerror = function () {
-      reject("GetUserRoleCz xhr error");
-    }
-  })
+  return postAPI("/besapp/base/rest/busiservice/cz/v1/user/getUserRoleCz", null);
 }
 async function isLoggedIn() {
-  return JSON.parse(await GetUserRoleCz()).header.retCode === "0"
+  try {
+    return JSON.parse(await GetUserRoleCz()).header.retCode === "0";
+  } catch (e) {
+    return false;
+  }
 }
 
 async function GetUsage(subscriberId) {
-  return new Promise(function (resolve, reject) {
-    xhr_usage = new XMLHttpRequest();
-    xhr_usage.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/cbs/bb/queryFreeUnit`);
-    prepare_xhr(xhr_usage)
-
-    xhr_usage.send(`{"subscriberId":"${subscriberId}"}`);
-
-    xhr_usage.onload = function () {
-      resolve(xhr_usage.response);
-    }
-    xhr_usage.onerror = function () {
-      reject("GetUsage xhr error");
-    }
-  })
+  return postAPI("/besapp/base/rest/busiservice/cz/cbs/bb/queryFreeUnit", { subscriberId });
 }
 
 async function GetBalance(acctId) {
-  return new Promise(function (resolve, reject) {
-    xhr_balance = new XMLHttpRequest();
-    xhr_balance.open('POST', `${service_url}/besapp/base/rest/busiservice/cbs/ar/queryBalance`);
-    prepare_xhr(xhr_balance)
+  return postAPI("/besapp/base/rest/busiservice/cbs/ar/queryBalance", { acctId });
+}
 
-    xhr_balance.send(`{"acctId":"${acctId}"}`);
-
-    xhr_balance.onload = function () {
-      resolve(xhr_balance.response);
-    }
-    xhr_balance.onerror = function () {
-      reject("GetBalance xhr error");
-    }
-  })
+// Shared quota fetch (was: same GetUsage/GetBalance/normalize block in Main + switchToLandline).
+async function fetchQuota(subscriberId, acctId) {
+  const usage_res = await GetUsage(subscriberId);
+  const usage = safeParse(usage_res, {});
+  rawUsageResponse.replaceChildren(Object.assign(document.createElement("pre"), { textContent: JSON.stringify(usage, null, 4) }));
+  usage?.body?.[0]?.freeUnitBeanDetailList?.forEach(bundle => {
+    bundle.usedAmount = bundle.initialAmount - bundle.currentAmount;
+    bundle.usagePercentage = ((bundle.usedAmount / bundle.initialAmount) * 100).toFixed();
+  });
+  consoleLog(usage);
+  const balance_res = await GetBalance(acctId);
+  const balance = safeParse(balance_res, {});
+  rawBalanceResponse.replaceChildren(Object.assign(document.createElement("pre"), { textContent: JSON.stringify(balance, null, 4) }));
+  consoleLog(balance);
+  return { usage, balance };
 }
 
 async function getLatestAppVersionNumber() {
-  return new Promise((resolve, reject) => {
-    try {
-      xhr_versionNo = new XMLHttpRequest();
-      xhr_versionNo.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/cms/getCzAppVersionList`);
-      xhr_versionNo.setRequestHeader('Content-Type', "application/json")
-      xhr_versionNo.send(`{"versionType":"P","versionStatus":"R","appType":"Selfcare","osType":"google"}`);
-      xhr_versionNo.onload = function (event) {
-        resolve(JSON.parse(xhr_versionNo.response).body[0].versionNo)
-      }
-      xhr_versionNo.ontimeout = function () { reject(null) }
-      xhr_versionNo.onerror = function (event) { reject(event) }
-    } catch (ex) {
-      reject(ex)
-    }
-  })
+  try {
+    const res = await fetch(`${service_url}/besapp/base/rest/busiservice/cz/v1/cms/getCzAppVersionList`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: `{"versionType":"P","versionStatus":"R","appType":"Selfcare","osType":"google"}`
+    });
+    return (await res.json()).body[0].versionNo;
+  } catch (ex) {
+    console.error(ex);
+    return "1.0.0";
+  }
 }
 
-prepare_xhr = function (xhr) {
+function prepare_xhr(xhr) {
   xhr.withCredentials = true;
   const headers = {
     accept: "application/json, text/plain, */*",
@@ -584,7 +573,7 @@ prepare_xhr = function (xhr) {
     headers.csrftoken = loginObj.body.token
   const extra_headers = localStorage.getItem(`${serviceNumber}_headers`)
   if (extra_headers !== null) {
-    const extra_headers_array = JSON.parse(extra_headers)
+    const extra_headers_array = safeParse(extra_headers, [])
     extra_headers_array.forEach(x => headers[x.key] = x.value)
     if (headers.refresh_token)
       headers.mrefresh_token = headers.refresh_token
@@ -593,8 +582,6 @@ prepare_xhr = function (xhr) {
 }
 
 //#endregion
-
-main_bundle_name = "C_TED_Primary_Fixed_Data"
 
 function refreshOverAll() {
   document.getElementById("overAll").style.display = "block";
@@ -612,7 +599,7 @@ function refreshOverAll() {
   ForDoms(".initialTotalAmount_overAll", el => { el.innerText = sumInitial; });
   ForDoms(".measureUnitEnName_overAll", el => { el.innerText = unitEnIds[main_bundle.measureUnit]; });
   ForDoms(".usedAmount_overAll", el => { el.innerText = sumUsed.toFixed(2); });
-  ForDoms(".freeAmount_overAll", el => { el.innerText = (sumInitial - sumUsed.toFixed(2)).toFixed(2); });
+  ForDoms(".freeAmount_overAll", el => { el.innerText = (sumInitial - sumUsed).toFixed(2); });
   ForDoms(".usagePercentage_overAll", el => { el.innerText = sumUsagePercentage; });
 
   document.getElementById("progressbar_overAll").style.width = sumUsagePercentage + "%";
@@ -629,11 +616,12 @@ function refreshOverAll() {
     document.querySelector(".pbExtraWrapper_overAll > div").appendChild(Object.assign(document.createElement('span'),{
       innerHTML: `${dpercentInfo.toFixed(2)}%`,
       style: `left: calc(${dpercentInfo.toFixed(2)}% - 21px);`,
-      className: "tip"
+      className: "tip auto-tip"
     }));
 
     document.querySelector(".pbExtraWrapper_overAll > div").appendChild(Object.assign(document.createElement('div'),{
       innerHTML: `&nbsp;`,
+      className: "auto-tip",
       style: `width: ${dpercentInfo.toFixed(2)}%; background-color: rgb(163 204 85 / 25%); position: absolute; transition: 0.5s; float: left; height: 3px; margin-top: 37px;`
     }));
 
@@ -641,22 +629,30 @@ function refreshOverAll() {
 }
 
 function createInfoFor(package, index) {
+  // DOM key may differ from API itemCode (duplicate main bundles); never mutate the API object.
+  let bundleKey = package.itemCode;
+  if (bundleKey === main_bundle_name && main_bundle?.offeringName !== package.offeringName)
+    bundleKey += "_" + package.offeringName.replace(/[^\w-]/g, "_");
   if (
     (package.itemCode === main_bundle_name && main_bundle?.offeringName === package.offeringName) ||
-    document.querySelector(`.freeUnitEnName_${package.itemCode}_${index}`)
+    document.querySelector(`.freeUnitEnName_${bundleKey}_${index}`)
   ) return;
-  if (package.itemCode === main_bundle_name && main_bundle?.offeringName !== package.offeringName)
-    package.itemCode += "_" + package.offeringName.replace(/\s/g, "_")
 
-  sampleHTML = document.getElementById("infoSpecimen").innerHTML;
-  sampleHTML = sampleHTML.replace(/{packageName}/g, "_" + package.itemCode + "_" + index);
-  nwInfo = document.createElement("div");
-  nwInfo.id = "div_" + package.itemCode;
+  const suffix = `_${bundleKey}_${index}`;
+  const specimen = document.getElementById("infoSpecimen");
+  const nwInfo = specimen.cloneNode(true);
+  nwInfo.id = "div_" + bundleKey;
   nwInfo.className = "transition";
-  nwInfo.innerHTML = sampleHTML;
-  document.getElementById("infoSpecimen").parentNode.insertBefore(nwInfo, document.getElementById("infoSpecimen"));
-  let escapedCode = CSS.escape(package.itemCode)
-  ForDoms("#div_" + escapedCode, el => { el.style.cursor = "pointer"; el.setAttribute("onclick", "toggleMerge(this)"); el.setAttribute("itemCode", package.itemCode); el.setAttribute("index", index); });
+  nwInfo.style.display = "";
+  nwInfo.querySelectorAll("*").forEach(el => {
+    if (el.id && el.id.includes("{packageName}")) el.id = el.id.split("{packageName}").join(suffix);
+    el.classList.forEach(cls => {
+      if (cls.includes("{packageName}")) el.classList.replace(cls, cls.split("{packageName}").join(suffix));
+    });
+  });
+  specimen.parentNode.insertBefore(nwInfo, specimen);
+  const escapedCode = CSS.escape(bundleKey)
+  ForDoms("#div_" + escapedCode, el => { el.style.cursor = "pointer"; el.setAttribute("onclick", "toggleMerge(this)"); el.setAttribute("itemCode", package.itemCode); el.setAttribute("domKey", bundleKey); el.setAttribute("index", index); });
 
   ForDoms(".freeUnitEnName_" + escapedCode + "_" + index, el => { el.style.display = "block"; });
   ForDoms(".pbExtraWrapper_" + escapedCode + "_" + index, el => { el.style.display = "flow-root"; });
@@ -690,19 +686,15 @@ function createInfoFor(package, index) {
 }
 
 function LogUsage(package, print){
-  let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
-  if (cachedLocalStorage[savedLogName] === undefined)
-    localStorage_setItem(savedLogName, JSON.stringify([]));
-
-  var history = JSON.parse(cachedLocalStorage[savedLogName]);
-  if (!Array.isArray(history)) return
+  const savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
+  const history = loadHistory(savedLogName);
 
   const isMaxHistory = history.length >= maxHistory && history.length > 0
-  const sameAmount = history[history.length - 1]?.key === package.usedAmount
+  const sameAmount = history.at(-1)?.key === package.usedAmount
   if (!sameAmount) {
     if (isMaxHistory) history.shift();
     history.push({ key: package.usedAmount, value: dataDate.getTime() })
-    localStorage_setItem(savedLogName, JSON.stringify(history));
+    saveHistory(savedLogName, history);
   }
 
   if (!print) return
@@ -711,16 +703,16 @@ function LogUsage(package, print){
 
 function RefreshInfo() {
 
-  main_bundle = usageObj.body[0].freeUnitBeanDetailList.sort((x, y) => y.initialAmount - x.initialAmount).find(x => x.itemCode == main_bundle_name)
-  // repopulating old api properties for easier migration
-  main_bundle.usedAmount = main_bundle.initialAmount - main_bundle.currentAmount
-  main_bundle.usagePercentage = ((main_bundle.usedAmount / main_bundle.initialAmount) * 100).toFixed()
+  main_bundle = [...usageObj.body[0].freeUnitBeanDetailList].sort((x, y) => y.initialAmount - x.initialAmount).find(x => x.itemCode == main_bundle_name)
 
   if (main_bundle == undefined) {
     ForDoms(".freeUnitEnName", el => { el.innerHTML = "<h3>No Active Internet Bundle</h3>"; document.querySelector("#info").className = "nobundleView"; });
     ForDoms("#balance", el => { el.innerText = "💰 " + (balanceObj == undefined ? "loading..." : (balanceObj.body.balanceInfo[0].totalAmount / 10000).toFixed(2)) + " EGP" });
     return;
   }
+  // repopulating old api properties for easier migration
+  main_bundle.usedAmount = main_bundle.initialAmount - main_bundle.currentAmount
+  main_bundle.usagePercentage = ((main_bundle.usedAmount / main_bundle.initialAmount) * 100).toFixed()
 
   dnew = new Date(new Date(main_bundle.expireTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
   dold = new Date(new Date(main_bundle.effectiveTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
@@ -742,7 +734,6 @@ function RefreshInfo() {
   document.getElementById("progressbarDateValue").style.left = "calc(" + dpercent.toFixed(2) + "% - 21px)";
   //document.getElementById("datePercentage").innerText = dpercent.toFixed(2);
 
-  oldusetimeperc = (dpercent - main_bundle.usagePercentage).toFixed(2);
   usetimeperc = (((0.01 * dpercent) * main_bundle.initialAmount) - main_bundle.usedAmount).toFixed(2);
 
   ForDoms(".freeUnitEnName", el => { el.innerText = main_bundle.offeringName; });
@@ -793,12 +784,12 @@ function PrintUsageHistory(package){
   }));
   if (!shouldShowHistory())
     document.querySelector(".usageHistoryTable").classList.add("d-none")
-  if (cachedLocalStorage[savedLogName] === undefined) {localStorage_setItem(savedLogName, JSON.stringify([])); }
+  const history = loadHistory(savedLogName);
   let dimGB = `<span class="dim">GB</span>`
   let printColoredSize = (size, prev) => `<span class="${size < 0 || size < prev ? "good-light-green" : "bad-red"}">${Math.abs(size).toFixed(2)} ${dimGB}</span>`;
-  for (let [index, usageDom] of JSON.parse(cachedLocalStorage[savedLogName]).entries()) {
+  for (let [index, usageDom] of history.entries()) {
     let usageNumDom = "";
-    let prev_key = JSON.parse(cachedLocalStorage?.[savedLogName])?.[index - 1]?.key
+    let prev_key = history?.[index - 1]?.key
     if (index > 0) {
       let usageNum = usageDom.key - prev_key;
       usageNumDom = printColoredSize(usageNum);
@@ -811,7 +802,7 @@ function PrintUsageHistory(package){
 
 function shouldShowHistory() { return (localStorage.getItem("show_history") ?? 'true') === 'true'; }
 
-window.toggleShowHistory = () => {
+function toggleShowHistory() {
   if ((localStorage.getItem("show_history") ?? 'true') === 'true') {
     localStorage.setItem("show_history", false)
     document.querySelector(".usageHistoryTable").classList.add("d-none")
@@ -825,21 +816,28 @@ window.toggleShowHistory = () => {
   }
 }
 
-window.clearHistory = (savedLogName) => {
+function clearHistory(savedLogName) {
   localStorage.removeItem(savedLogName);
   document.querySelector(".usageHistoryTable tbody")?.replaceChildren(document.querySelector(".usageHistoryTable tbody")?.firstElementChild);
 }
 
 //#endregion
 
-toggleMerge = function (elm) {
+// Inline onclick handlers in generated HTML need these on window (userscript sandbox).
+window.sendCaptcha = sendCaptcha;
+window.toggleMerge = toggleMerge;
+window.switchToLandline = switchToLandline;
+window.toggleShowHistory = toggleShowHistory;
+window.clearHistory = clearHistory;
+
+function toggleMerge(elm) {
   if (!elm.classList.toggle("dim")) { RefreshInfo(); PrintUsageHistory(main_bundle); return; }
 
-  let itemcode = elm.getAttribute("itemcode") + "_" + elm.getAttribute("index");
+  const itemcode = (elm.getAttribute("domKey") || elm.getAttribute("itemcode")) + "_" + elm.getAttribute("index");
   PrintUsageHistory(usageObj.body[0].freeUnitBeanDetailList.find(x => x.itemCode == elm.getAttribute("itemcode")))
-  document.querySelector(".usedAmount").innerHTML = (parseFloat(document.querySelector(".usedAmount").innerText) + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText)).toFixed(2);
-  document.querySelector(".initialTotalAmount").innerHTML = parseFloat(document.querySelector(".initialTotalAmount").innerText) + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText);
-  document.querySelector(".freeAmount").innerHTML = Number((parseFloat(document.querySelector(".freeAmount").innerText) + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText)).toFixed(2));
+  document.querySelector(".usedAmount").textContent = (parseFloat(document.querySelector(".usedAmount").textContent) + parseFloat(document.querySelector(".usedAmount_" + itemcode).textContent)).toFixed(2);
+  document.querySelector(".initialTotalAmount").textContent = parseFloat(document.querySelector(".initialTotalAmount").textContent) + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).textContent);
+  document.querySelector(".freeAmount").textContent = Number((parseFloat(document.querySelector(".freeAmount").textContent) + parseFloat(document.querySelector(".freeAmount_" + itemcode).textContent)).toFixed(2));
   let mergedUsedAmount = parseFloat(main_bundle.usedAmount + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText));
   let mergedFreeAmount = parseFloat(main_bundle.currentAmount + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText));
   let mergedInitialTotalAmount = parseFloat(main_bundle.initialAmount + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText));
@@ -853,48 +851,60 @@ toggleMerge = function (elm) {
   document.querySelector("#progressbarValue").style.left = "calc(" + mergedUsagePercentage + "% - 21px)";
 }
 
-drawDifferenceFromLastLoad = function () {
+function drawDifferenceFromLastLoad() {
   document.querySelectorAll(".drawedDiff").forEach(e=>e.parentNode.removeChild(e))
-  let bundles_list = usageObj.body[0].freeUnitBeanDetailList.toSorted((a,b)=>b.effectiveTime - a.effectiveTime)
-  let oooo = Object.keys(localStorage)
-    .filter(k => k.startsWith(`usageHistory-${serviceNumber}`))
-    .map(x => JSON.parse(localStorage[x]).map(y=> ({obj: bundles_list.find(z => x.endsWith(z.itemCode)), ...y}) ))
-    .map(x => x.at(-2))
+  if (!usageObj?.body?.[0]?.freeUnitBeanDetailList) return;
+  const bundles_list = usageObj.body[0].freeUnitBeanDetailList.toSorted((a,b)=>b.effectiveTime - a.effectiveTime)
+  const prefix = `usageHistory-${serviceNumber}-`;
+  const snapshots = Object.keys(localStorage)
+    .filter(k => k.startsWith(prefix))
+    .map(k => {
+      let entries;
+      try { entries = JSON.parse(localStorage[k]); } catch (e) { return null; }
+      if (!Array.isArray(entries) || entries.length < 2) return null;
+      const bundle = bundles_list.find(z => z.itemCode === k.slice(prefix.length));
+      if (!bundle) return null;
+      return { bundle, prev: entries.at(-2) };
+    })
     .filter(Boolean)
-  oooo = oooo
-    .filter(item => item.value === Math.max(...oooo.map(item => item.value)))
-    .map(y => ({
-      usagePercentage: y.obj?.usagePercentage,
-      width: ((y.obj?.usedAmount - y.key) / y.obj?.initialAmount) * 100,
-      sister_dom: document.querySelector(y.obj.itemCode === main_bundle_name ? `#progressbar` : `[id*=${y.obj.itemCode}] .progressbar`),
-    }))
-    .filter(x => x?.sister_dom)
-  oooo.forEach(x => {
-    x.style_width = (((x.sister_dom.parentNode.clientWidth*(x.width/100)) / ((x.usagePercentage/100)*x.sister_dom.parentNode.clientWidth)) * 100)
-    x.sister_dom.appendChild(Object.assign(document.createElement('div'), {
-      className: "progressbar drawedDiff",
-      style: `width: ${x.style_width > 100 ? 100 : x.style_width}%; background-color: rgb(220 30 255 / 56%); right: 0; display: inline;`,
-      innerHTML: "&nbsp;"
-    }))
-  })
+  if (snapshots.length === 0) return;
+  const latest = Math.max(...snapshots.map(item => item.prev.value));
+  snapshots
+    .filter(item => item.prev.value === latest)
+    .forEach(item => {
+      const { bundle, prev } = item;
+      if (!bundle.usagePercentage) return;
+      const width = ((bundle.usedAmount - prev.key) / bundle.initialAmount) * 100;
+      const sister_dom = document.querySelector(bundle.itemCode === main_bundle_name ? `#progressbar` : `[id*="${CSS.escape(bundle.itemCode)}"] .progressbar`);
+      if (!sister_dom) return;
+      const style_width = (width / bundle.usagePercentage) * 100;
+      sister_dom.appendChild(Object.assign(document.createElement('div'), {
+        className: "progressbar drawedDiff",
+        style: `width: ${style_width > 100 ? 100 : style_width}%; background-color: rgb(220 30 255 / 56%); right: 0; display: inline;`,
+        innerHTML: "&nbsp;"
+      }));
+    })
 }
 
 async function Main() {
   dataDate = new Date();
   lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
-  loginObj   = JSON.parse(localStorage.getItem(`${serviceNumber}_loginObj`)) ?? undefined
+  loginObj = safeParse(localStorage.getItem(`${serviceNumber}_loginObj`), undefined)
   usageObj   = undefined
   balanceObj = undefined
   appVersionNo = await getLatestAppVersionNumber()
 
-  if (!await isLoggedIn()) await RefreshAppToken()
+  // single session check when already logged in (was: two full role checks)
+  if (!await isLoggedIn()) {
+    try { await RefreshAppToken(); } catch (e) { console.error(e); }
+  }
 
   if (!await isLoggedIn()) {
     //#region Login
     let login_res = await Login();
     if (login_res.includes('"retCode":"0"')) {
       localStorage.setItem(`${serviceNumber}_loginObj`, login_res)
-      loginObj = JSON.parse(login_res);
+      loginObj = safeParse(login_res, undefined);
       consoleLog(loginObj);
     } else {
       console.log("login_res", login_res);
@@ -904,88 +914,37 @@ async function Main() {
     //#endregion
   }
 
-  //#region GetUsage
-  let usage_res = await GetUsage(loginObj.body.subscriber.subscriberId)
-  rawUsageResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(usage_res), null, 4) + "</PRE>";
-  usageObj = JSON.parse(usage_res);
-  usageObj?.body?.[0]?.freeUnitBeanDetailList?.forEach(package=>{
-    package.usedAmount = package.initialAmount - package.currentAmount
-    package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
-  })
-  consoleLog(usageObj);
-  //#endregion
+  ({ usage: usageObj, balance: balanceObj } = await fetchQuota(loginObj.body.subscriber.subscriberId, loginObj.body.account.acctId));
   
-  //#region GetBalance
-  let balance_res = await GetBalance(loginObj.body.account.acctId);
-  rawBalanceResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(balance_res), null, 4) + "</PRE>";
-  balanceObj = JSON.parse(balance_res);
-  consoleLog(balanceObj);
-  //#endregion
+
 
   RefreshInfo();
   drawDifferenceFromLastLoad();
 }
 Main();
 
-getAssociatedLines = async function() {
-  return new Promise(function (resolve, reject) {
-    xhr_AssociatedLines = new XMLHttpRequest();
-    xhr_AssociatedLines.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/account/getAssociatedLines`);
-    prepare_xhr(xhr_AssociatedLines)
-
-    xhr_AssociatedLines.send(`{"subscriberId":"${loginObj.body.subscriber.subscriberId}","serviceNumber":"${loginObj.body.loginId}"}`);
-
-    xhr_AssociatedLines.onload = function () {
-      resolve(xhr_AssociatedLines.response);
-    }
-    xhr_AssociatedLines.onerror = function () {
-      reject("getAssociatedLines xhr error");
-    }
-  })
+async function getAssociatedLines() {
+  return postAPI("/besapp/base/rest/busiservice/v1/account/getAssociatedLines", {
+    subscriberId: loginObj.body.subscriber.subscriberId,
+    serviceNumber: loginObj.body.loginId
+  });
 }
 
-landlineView = async function() {
-  let lines = await getAssociatedLines()
-
-}
-
-querySubscribers = async function(subscriberId) {
-  return new Promise(function (resolve, reject) {
-    xhr_querySubscribers = new XMLHttpRequest();
-    xhr_querySubscribers.open('POST', `${service_url}/besapp/base/rest/busiservice/cz/v1/customer/querySubscribers`);
-    prepare_xhr(xhr_querySubscribers)
-
-    xhr_querySubscribers.send(`{"subscriberId":"${subscriberId}","pageSize":10,"startNum":0}`);
-
-    xhr_querySubscribers.onload = function () {
-      resolve(xhr_querySubscribers.response);
-    }
-    xhr_querySubscribers.onerror = function () {
-      reject("querySubscribers xhr error");
-    }
-  })
+async function querySubscribers(subscriberId) {
+  return postAPI("/besapp/base/rest/busiservice/cz/v1/customer/querySubscribers", { subscriberId, pageSize: 10, startNum: 0 });
 }
 
 
-switchAccount = async function(serviceNumber) {
-  return new Promise(function (resolve, reject) {
-    let xhr_switchAccount = new XMLHttpRequest();
-    xhr_switchAccount.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/account/switchAccount`);
-    prepare_xhr(xhr_switchAccount)
-
-    xhr_switchAccount.send(`{"subsId":"${loginObj.body.subscriber.subscriberId}","servNumber":"${serviceNumber}","channel":"702"}`);
-
-    xhr_switchAccount.onload = function () {
-      resolve(xhr_switchAccount.response);
-    }
-    xhr_switchAccount.onerror = function () {
-      reject("switchAccount xhr error");
-    }
-  })
+async function switchAccount(servNumber) {
+  return postAPI("/besapp/base/rest/busiservice/v1/account/switchAccount", {
+    subsId: loginObj.body.subscriber.subscriberId,
+    servNumber,
+    channel: "702"
+  });
 }
 
 
-switchToLandline = async function () {
+async function switchToLandline() {
   if (main_bundle_name === "C_FV_Normal_VoiceI") {
     location = location
     return
@@ -996,37 +955,20 @@ switchToLandline = async function () {
   usageObj   = undefined
   balanceObj = undefined
 
-  let associatedLines = await getAssociatedLines()
-  associatedLinesObj = JSON.parse(associatedLines)
-  let subscriberId = associatedLinesObj.body.AssociatedNumbers.find(x => x.networkType == '4').subscriberId
-
-  //#region GetUsage
-  let usage_res = await GetUsage(subscriberId)
-  rawUsageResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(usage_res), null, 4) + "</PRE>";
-  usageObj = JSON.parse(usage_res);
-  usageObj?.body?.[0]?.freeUnitBeanDetailList?.forEach(package=>{
-    package.usedAmount = package.initialAmount - package.currentAmount
-    package.usagePercentage = ((package.usedAmount / package.initialAmount)*100).toFixed()
-  })
-  consoleLog(usageObj);
-  //#endregion
+  const associatedLines = await getAssociatedLines()
+  const associatedLinesObj = safeParse(associatedLines, {})
+  const subscriberId = associatedLinesObj.body.AssociatedNumbers.find(x => x.networkType == '4').subscriberId
 
 
-  let subscribers = await querySubscribers(subscriberId)
-  querySubscribersObj = JSON.parse(subscribers)
-  let subscriber = querySubscribersObj.body.subscriberList.find(x => x.subscriberId === subscriberId)
-  let acctId = subscriber.accountId
+  const subscribers = await querySubscribers(subscriberId)
+  const querySubscribersObj = safeParse(subscribers, {})
+  const subscriber = querySubscribersObj.body.subscriberList.find(x => x.subscriberId === subscriberId)
+  const acctId = subscriber.accountId
   
-  let switchAccount_res = await switchAccount(subscriber.servNumber)
-  switchAccountObj = JSON.parse(switchAccount_res)
-  loginObj.body.token = switchAccountObj.body.token
+  const switchAccount_res = await switchAccount(subscriber.servNumber)
+  loginObj.body.token = safeParse(switchAccount_res, {}).body.token
 
-  //#region GetBalance
-  let balance_res = await GetBalance(acctId);
-  rawBalanceResponse.innerHTML = "<PRE>" + JSON.stringify(JSON.parse(balance_res), null, 4) + "</PRE>";
-  balanceObj = JSON.parse(balance_res);
-  consoleLog(balanceObj);
-  //#endregion
+  ({ usage: usageObj, balance: balanceObj } = await fetchQuota(subscriberId, acctId));
 
   RefreshInfo();
   drawDifferenceFromLastLoad();
