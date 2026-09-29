@@ -321,7 +321,20 @@ var html = `<html><meta name="color-scheme" content="dark" /><div id="error"></d
 
 </div><html>`
 
-document.head.parentNode.innerHTML = `<title>${title}</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>${style}</style>${html}`
+document.title = title;
+let viewportMeta = document.querySelector('meta[name="viewport"]');
+if (!viewportMeta) {
+  viewportMeta = document.createElement('meta');
+  viewportMeta.name = 'viewport';
+  document.head.appendChild(viewportMeta);
+}
+viewportMeta.content = 'width=device-width, initial-scale=1.0';
+const bootStyle = document.createElement('style');
+bootStyle.textContent = style;
+document.head.appendChild(bootStyle);
+const bootWrap = document.createElement('div');
+bootWrap.innerHTML = html;
+document.documentElement.appendChild(bootWrap);
 
 //#endregion
 
@@ -921,7 +934,9 @@ async function Main() {
     //#endregion
   }
 
-  ({ usage: usageObj, balance: balanceObj } = await fetchQuota(loginObj.body.subscriber.subscriberId, loginObj.body.account.acctId));
+  const quota = await fetchQuota(loginObj.body.subscriber.subscriberId, loginObj.body.account.acctId);
+  usageObj = quota.usage;
+  balanceObj = quota.balance;
   
 
 
@@ -953,8 +968,8 @@ async function switchAccount(servNumber) {
 
 async function switchToLandline() {
   if (main_bundle_name === "C_FV_Normal_VoiceI") {
-    location = location
-    return
+    location.reload();
+    return;
   }
   main_bundle_name = "C_FV_Normal_VoiceI"
   dataDate = new Date();
@@ -964,7 +979,7 @@ async function switchToLandline() {
 
   const associatedLines = await getAssociatedLines()
   const associatedLinesObj = safeParse(associatedLines, {})
-  const subscriberId = associatedLinesObj.body.AssociatedNumbers.find(x => x.networkType == '4').subscriberId
+  const subscriberId = associatedLinesObj.body.AssociatedNumbers.find(x => String(x.networkType) === '4').subscriberId
 
 
   const subscribers = await querySubscribers(subscriberId)
@@ -972,10 +987,12 @@ async function switchToLandline() {
   const subscriber = querySubscribersObj.body.subscriberList.find(x => x.subscriberId === subscriberId)
   const acctId = subscriber.accountId
   
-  const switchAccount_res = await switchAccount(subscriber.servNumber)
-  loginObj.body.token = safeParse(switchAccount_res, {}).body.token
+  const switchAccount_res = await switchAccount(subscriber.servNumber);
+  loginObj.body.token = safeParse(switchAccount_res, {}).body.token;
 
-  ({ usage: usageObj, balance: balanceObj } = await fetchQuota(subscriberId, acctId));
+  const landQuota = await fetchQuota(subscriberId, acctId);
+  usageObj = landQuota.usage;
+  balanceObj = landQuota.balance;
 
   RefreshInfo();
   drawDifferenceFromLastLoad();
