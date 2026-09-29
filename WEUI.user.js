@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-09-29.3
+// @version      2026-09-29.4
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -12,7 +12,6 @@
 
 // prevent original page loading
 window.stop();
-document.querySelector("body > pre")?.remove();
 
 //#region parameters
 
@@ -322,20 +321,7 @@ var html = `<html><meta name="color-scheme" content="dark" /><div id="error"></d
 
 </div><html>`
 
-document.title = title;
-let viewportMeta = document.querySelector('meta[name="viewport"]');
-if (!viewportMeta) {
-  viewportMeta = document.createElement('meta');
-  viewportMeta.name = 'viewport';
-  document.head.appendChild(viewportMeta);
-}
-viewportMeta.content = 'width=device-width, initial-scale=1.0';
-const bootStyle = document.createElement('style');
-bootStyle.textContent = style;
-document.head.appendChild(bootStyle);
-const bootWrap = document.createElement('div');
-bootWrap.innerHTML = html;
-document.documentElement.appendChild(bootWrap);
+document.head.parentNode.innerHTML = `<title>${title}</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>${style}</style>${html}`
 
 //#endregion
 
