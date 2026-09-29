@@ -37,12 +37,7 @@ if (!script.includes(queryBlock)) {
 }
 script = script.replace(queryBlock, storageBlock);
 
-// Android WebView build targets the official app domain, not the proxy host.
-script = script.replace(
-  "// @match        https://we-auth.mostafab2010.workers.dev/echannel/service/WEUIInternet?*",
-  "// @match        https://app-my.te.eg/echannel/service/WEUIInternet?*"
-);
-
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, script);
+fs.writeFileSync("d:\\Programming\\Android\\utilities\\elnet\\app\\src\\main\\res\\raw\\we.js", script)
 console.log(`Wrote ${outPath}`);
