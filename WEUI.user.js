@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-09-29.2
+// @version      2026-09-29.3
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -12,6 +12,7 @@
 
 // prevent original page loading
 window.stop();
+document.querySelector("body > pre")?.remove();
 
 //#region parameters
 
