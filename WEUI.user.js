@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-09-29.4
+// @version      2026-09-29.5
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -354,6 +354,12 @@ if (isMobile) maxHistory = maxHistoryMobile;
 
 // Shared runtime state (explicit lets; these were implicit globals before).
 let loginObj, usageObj, balanceObj, appVersionNo, dataDate;
+// Expose to DevTools console (top-level let otherwise invisible on window).
+Object.defineProperties(window, {
+  loginObj: { get: () => loginObj, set: v => { loginObj = v; }, configurable: true },
+  usageObj: { get: () => usageObj, set: v => { usageObj = v; }, configurable: true },
+  balanceObj: { get: () => balanceObj, set: v => { balanceObj = v; }, configurable: true }
+});
 let main_bundle, main_bundle_name = "C_TED_Primary_Fixed_Data";
 let dnew, dold, dnow, dpercent;
 let remGB, remDays, remDaysFrac, compAvgUsage, usetimeperc;
