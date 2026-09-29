@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-09-29.0
+// @version      2026-09-29.6
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
 // @author       Bondok
-// @match        https://app-my.te.eg/echannel/service/WEUIInternet?*
+// @match        https://we-auth.mostafab2010.workers.dev/echannel/service/WEUIInternet?*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @grant        none
 // ==/UserScript==
@@ -321,27 +321,19 @@ var html = `<html><meta name="color-scheme" content="dark" /><div id="error"></d
 
 </div><html>`
 
-document.title = title;
-let viewportMeta = document.querySelector('meta[name="viewport"]');
-if (!viewportMeta) {
-  viewportMeta = document.createElement('meta');
-  viewportMeta.name = 'viewport';
-  document.head.appendChild(viewportMeta);
-}
-viewportMeta.content = 'width=device-width, initial-scale=1.0';
-const bootStyle = document.createElement('style');
-bootStyle.textContent = style;
-document.head.appendChild(bootStyle);
-const bootWrap = document.createElement('div');
-bootWrap.innerHTML = html;
-document.documentElement.appendChild(bootWrap);
+document.head.parentNode.innerHTML = `<title>${title}</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>${style}</style>${html}`
 
 //#endregion
 
-//#region initialize vars & params & maxHistory length
+//#region state
 
-// capture exceptions to be displayed on phones by alerts
-window.onerror = function (error, _url, line) { console.error(line + ": " + error); const err = document.getElementById("error"); if (err) err.textContent = line + ": " + error; };
+window.onerror = function (error, _url, line) {
+  console.error(`${line}: ${error}`);
+  const errBox = document.querySelector("#error");
+  if (errBox) {
+    errBox.textContent = `${line}: ${error}`;
+  }
+};
 
 //__CREDENTIALS:STORAGE__
 let serviceNumber = localStorage.getItem("serviceNumber");
@@ -355,181 +347,312 @@ if (!serviceNumber || !password){
 }
 //__END_CREDENTIALS__
 
-let deviceid = generateRandomHexString(16);
-const stored_deviceid = localStorage.getItem(`${serviceNumber}_deviceid`);
-if ((serviceNumber || "").trim().length > 0) {
-  if (stored_deviceid)
-    deviceid = stored_deviceid;
-  else
-    localStorage.setItem(`${serviceNumber}_deviceid`, deviceid);
-}
-
-// (removed: cachedLocalStorage mirror — it went stale after clearHistory/removeItem; read localStorage directly)
-
 const unitEnIds = { 1106: "B", 1107: "KB", 1108: "MB", 1109: "GB", 1004: "min" };
+const HOST = "we-auth.mostafab2010.workers.dev";
+const SERVICE_URL = `https://${HOST}/echannel/service`;
+const CAPTCHA_URL = "https://captcha.te.eg/api/Captcha/GenerateCaptcha";
+const MAIN_INTERNET_CODE = "C_TED_Primary_Fixed_Data";
+const LANDLINE_CODE = "C_FV_Normal_VoiceI";
 
 let isMobile = false;
-if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) { document.body.style.background = 0; isMobile = true; }
-if (isMobile) maxHistory = maxHistoryMobile;
+if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+  document.body.style.background = "none";
+  isMobile = true;
+}
+if (isMobile) {
+  maxHistory = maxHistoryMobile;
+}
 
-// Shared runtime state (explicit lets; these were implicit globals before).
-let loginObj, usageObj, balanceObj, appVersionNo, dataDate;
-let main_bundle, main_bundle_name = "C_TED_Primary_Fixed_Data";
-let dnew, dold, dnow, dpercent;
-let remGB, remDays, remDaysFrac, compAvgUsage, usetimeperc;
-let sumInitial, sumUsed, sumUsagePercentage;
-let dnewInfo, doldInfo, dnowInfo, dpercentInfo;
-let xhr_login, captcha_send_json;
+// Runtime state shared across render + API layers.
+let loginObj;
+let usageObj;
+let balanceObj;
+let appVersionNo;
+let dataDate;
+Object.defineProperties(window, {
+  loginObj: { get: () => loginObj, set: (v) => { loginObj = v; }, configurable: true },
+  usageObj: { get: () => usageObj, set: (v) => { usageObj = v; }, configurable: true },
+  balanceObj: { get: () => balanceObj, set: (v) => { balanceObj = v; }, configurable: true }
+});
+let main_bundle;
+let main_bundle_name = MAIN_INTERNET_CODE;
+let dnew = 0;
+let dold = 0;
+let dpercent = 0;
+let xhr_login;
+let captcha_send_json;
+
+let deviceid = generateRandomHexString(16);
+if ((serviceNumber || "").trim().length > 0) {
+  const storedDeviceId = localStorage.getItem(`${serviceNumber}_deviceid`);
+  if (storedDeviceId) {
+    deviceid = storedDeviceId;
+  } else {
+    localStorage.setItem(`${serviceNumber}_deviceid`, deviceid);
+  }
+}
 
 //#endregion
 
-//#region helping functions
+//#region dom helpers
+
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+function ForDoms(selector, action) {
+  for (const el of $$(selector)) {
+    action(el);
+  }
+}
+function setText(selector, value, root = document) {
+  for (const el of $$(selector, root)) {
+    el.textContent = value;
+  }
+}
+function setBar(barSelector, tipSelector, percentText) {
+  const bar = $(barSelector);
+  const tip = $(tipSelector);
+  if (bar) {
+    bar.style.width = percentText;
+  }
+  if (tip) {
+    tip.textContent = percentText;
+    tip.style.left = `calc(${percentText} - 21px)`;
+  }
+}
+// Midnight-to-midnight window for an effective/expire pair; guards NaN on bad API dates.
+function bundleWindow(effectiveTime, expireTime) {
+  const startLabel = new Date(effectiveTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const endLabel = new Date(expireTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const start = new Date(`${startLabel} 0:0:0`).getTime();
+  const end = new Date(`${endLabel} 0:0:0`).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end === start) {
+    return { start: Date.now(), end: Date.now() + 86400000, percent: 0 };
+  }
+  return { start, end, percent: ((Date.now() - start) / (end - start)) * 100 };
+}
+function normalizeBundle(bundle) {
+  bundle.usedAmount = bundle.initialAmount - bundle.currentAmount;
+  bundle.usagePercentage = ((bundle.usedAmount / bundle.initialAmount) * 100).toFixed();
+  return bundle;
+}
+function bundleList() {
+  return usageObj?.body?.[0]?.freeUnitBeanDetailList ?? [];
+}
+function bundleListFrom(usage) {
+  return usage?.body?.[0]?.freeUnitBeanDetailList ?? [];
+}
+function balanceText() {
+  if (balanceObj === undefined) {
+    return "loading...";
+  }
+  return `${(balanceObj.body.balanceInfo[0].totalAmount / 10000).toFixed(2)} EGP`;
+}
+function formatYMD(time) {
+  const d = new Date(time);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+//#endregion
+
+//#region utils
 
 function loadHistory(savedLogName) {
   try {
     const parsed = JSON.parse(localStorage.getItem(savedLogName) ?? "[]");
     return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
+  } catch {
     return [];
   }
 }
-function saveHistory(savedLogName, history) { localStorage.setItem(savedLogName, JSON.stringify(history)); }
-function consoleLog() { /* verbose logging disabled; use console.log directly when debugging */ }
-function generateRandomHexString(length){ return [...Array(length)].map(() => Math.floor(Math.random() * 16).toString(16)).join('') }
-function diffToDaysAhead(days) { return new Date(new Date().setHours((days * 24), 0, 0)) - new Date() }
-function ForDoms(selector, action) {  Array.from(document.querySelectorAll(selector)).forEach(action); }
-function formatedDate(date) {
-  const time_str = date.toLocaleString('en-eg', { hour: "2-digit", minute: "2-digit", hour12: true })
-  const date_str = date.toLocaleString('en-uk', { day: "2-digit", month: "short" })
-  return `${date_str} ${time_str}`;
+function saveHistory(savedLogName, history) {
+  localStorage.setItem(savedLogName, JSON.stringify(history));
 }
-function msToTime(duration, leading_zero = false) {
-  let minutes = Math.floor((duration / (1000 * 60)) % 60)
-  let hours   = Math.floor((duration / (1000 * 60 * 60)) % 24);
-  if (leading_zero) {
-    hours = hours < 10 ? `0${hours}` : hours;
-    minutes = minutes < 10 ? `0${minutes}` : minutes;
+function generateRandomHexString(length) {
+  let out = "";
+  for (let i = 0; i < length; i++) {
+    out += Math.floor(Math.random() * 16).toString(16);
   }
+  return out;
+}
+function diffToDaysAhead(days) {
+  return new Date(new Date().setHours(days * 24, 0, 0, 0)) - Date.now();
+}
+function formatedDate(date) {
+  const timeStr = date.toLocaleString("en-eg", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const dateStr = date.toLocaleString("en-uk", { day: "2-digit", month: "short" });
+  return `${dateStr} ${timeStr}`;
+}
+function msToTime(duration) {
+  const minutes = String(Math.floor((duration / 60000) % 60)).padStart(2, "0");
+  const hours = String(Math.floor((duration / 3600000) % 24)).padStart(2, "0");
   return `${hours}h ${minutes}m`;
+}
+function safeParse(text, fallback) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return fallback;
+  }
 }
 
 //#endregion
 
-//#region requests Login, GetUsage, GetBalance, getLatestAppVersionNumber, prepare_xhr
+//#region api
 
 async function getCaptchaToken() {
-  const res = await fetch("https://captcha.te.eg/api/Captcha/GenerateCaptcha", {
-    method: 'POST',
-    referrerPolicy: 'no-referrer',
-    headers: {"content-type": "application/json; charset=utf-8"},
-    body: JSON.stringify({
-      "merchantName": "E-Care",
-      "serviceName": "Login",
-      "identifier": serviceNumber
-    })
-  })
-
-  const json = await res.json()
-  return { token: json.token, image: json.captcha }
+  const res = await fetch(CAPTCHA_URL, {
+    method: "POST",
+    referrerPolicy: "no-referrer",
+    headers: { "content-type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ merchantName: "E-Care", serviceName: "Login", identifier: serviceNumber })
+  });
+  const json = await res.json();
+  return { token: json.token, image: json.captcha };
 }
 
 function sendCaptcha() {
-  captcha_send_json.imgCode = captcha_solution.value
-  xhr_login.send(JSON.stringify(captcha_send_json))
-  Array.from(document.querySelectorAll(".captcha")).forEach(x=>x.parentNode.removeChild(x))
+  const input = document.querySelector("#captcha_solution");
+  captcha_send_json.imgCode = input?.value ?? "";
+  xhr_login.send(JSON.stringify(captcha_send_json));
+  for (const node of document.querySelectorAll(".captcha")) {
+    node.remove();
+  }
 }
 
-const host = "we-auth.mostafab2010.workers.dev"
-const service_url = `https://${host}/echannel/service`
+function createLoginRequest(payload) {
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", `${SERVICE_URL}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
+  prepare_xhr(xhr);
+  const promise = new Promise((resolve, reject) => {
+    xhr.onload = () => {
+      saveAuthHeaders(xhr.response);
+      resolve(xhr.response);
+    };
+    xhr.onerror = () => {
+      reject(new Error("Login xhr error"));
+    };
+    xhr.send(JSON.stringify(payload));
+  });
+  return { xhr, promise };
+}
+
+function createPendingLoginRequest(payload) {
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", `${SERVICE_URL}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
+  prepare_xhr(xhr);
+  const promise = new Promise((resolve, reject) => {
+    xhr.onload = () => {
+      saveAuthHeaders(xhr.response);
+      resolve(xhr.response);
+    };
+    xhr.onerror = () => {
+      reject(new Error("Login xhr error"));
+    };
+  });
+  void payload;
+  return { xhr, promise };
+}
 
 async function Login() {
-  // NOTE: keeps raw XHR (not postAPI) because the captcha flow defers .send() until user input.
-  const captcha_token = await getCaptchaToken();
+  // Raw XHR (not postAPI): captcha flow defers .send() until user solves overlay.
+  const captchaToken = await getCaptchaToken();
   captcha_send_json = {
-      "acctId": `FBB${serviceNumber.replace(/^0+/, '')}`,
-      "password": password,
-      "appLocale": "en-US",
-      "isSelfcare": "Y",
-      "isMobile": "Y",
-      "imgCacheKey": captcha_token.token
-    }
-    if (captcha_token.image) {
-      document.body.appendChild(Object.assign(document.createElement('div'),{className: "captcha", innerHTML: `
-        <div><img src="${captcha_token.image}"><input type="text" id="captcha_solution"><button onclick="sendCaptcha()">submit</button></div>
-      `}))
-      return new Promise(function (resolve, reject) {
-        xhr_login = new XMLHttpRequest();
-        xhr_login.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
-        prepare_xhr(xhr_login);
-        xhr_login.onload = function () {
-          saveAuthHeaders(xhr_login.response);
-          resolve(xhr_login.response);
-        };
-        xhr_login.onerror = function () { reject(new Error("Login xhr error")); };
-      });
-    }
-    xhr_login = new XMLHttpRequest();
-    xhr_login.open('POST', `${service_url}/besapp/base/rest/busiservice/v1/auth/userAuthenticate`);
-    prepare_xhr(xhr_login);
-    return new Promise(function (resolve, reject) {
-      xhr_login.onload = function () {
-        saveAuthHeaders(xhr_login.response);
-        resolve(xhr_login.response);
-      };
-      xhr_login.onerror = function () { reject(new Error("Login xhr error")); };
-      xhr_login.send(JSON.stringify(captcha_send_json));
-    });
+    acctId: `FBB${serviceNumber.replace(/^0+/, "")}`,
+    password,
+    appLocale: "en-US",
+    isSelfcare: "Y",
+    isMobile: "Y",
+    imgCacheKey: captchaToken.token
+  };
+  if (!captchaToken.image) {
+    return createLoginRequest(captcha_send_json).promise;
+  }
+  const overlay = document.createElement("div");
+  overlay.className = "captcha";
+  const box = document.createElement("div");
+  const img = document.createElement("img");
+  img.src = captchaToken.image;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.id = "captcha_solution";
+  const button = document.createElement("button");
+  button.textContent = "submit";
+  button.addEventListener("click", sendCaptcha);
+  box.append(img, input, button);
+  overlay.append(box);
+  document.body.append(overlay);
+  const pending = createPendingLoginRequest(captcha_send_json);
+  xhr_login = pending.xhr;
+  return pending.promise;
 }
 
 function parseAuthCookies() {
-  return document.cookie.split(";").reduce((acc, curr) => {
-    const split = curr.split('=');
-    if (curr.length < 1 || split.length < 2) return acc;
-    acc[split[0].trim()] = split[1]?.trim();
-    return acc;
-  }, {});
-}
-
-function safeParse(text, fallback) {
-  try { return JSON.parse(text); } catch (e) { return fallback; }
+  const out = {};
+  for (const part of document.cookie.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq < 0) {
+      continue;
+    }
+    const key = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1).trim();
+    if (key.length === 0 || value.length === 0) {
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
 }
 
 function saveAuthHeaders(responseText) {
-  const cookie_obj = parseAuthCookies();
+  const cookieObj = parseAuthCookies();
   localStorage.setItem(`${serviceNumber}_headers`, JSON.stringify([
-    { key: "csrftoken", value: safeParse(responseText, {})?.body?.token ?? "" },
-    { key: "indiv_login_token", value: cookie_obj.indiv_login_token },
-    { key: "refresh_token", value: cookie_obj.refresh_token }
+    { key: "csrftoken", value: safeParse(responseText, {}).body?.token ?? "" },
+    { key: "indiv_login_token", value: cookieObj.indiv_login_token },
+    { key: "refresh_token", value: cookieObj.refresh_token }
   ]));
 }
 
-// Single XHR helper: every API call goes through here (was: 9 copy-pasted wrappers).
+// Single XHR helper: every API call goes through here except Login captcha flow.
 function postAPI(path, body) {
-  return new Promise(function (resolve, reject) {
+  return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${service_url}${path}`);
+    xhr.open("POST", `${SERVICE_URL}${path}`);
     prepare_xhr(xhr);
-    xhr.onload = function () { resolve(xhr.response); };
-    xhr.onerror = function () { reject(new Error(`POST ${path} failed`)); };
-    xhr.send(body == null ? null : (typeof body === "string" ? body : JSON.stringify(body)));
+    xhr.onload = () => {
+      resolve(xhr.response);
+    };
+    xhr.onerror = () => {
+      reject(new Error(`POST ${path} failed`));
+    };
+    if (body === null || body === undefined) {
+      xhr.send(null);
+    } else if (typeof body === "string") {
+      xhr.send(body);
+    } else {
+      xhr.send(JSON.stringify(body));
+    }
   });
 }
+
 async function RefreshAppToken() {
-  const number = `FBB${serviceNumber.replace(/^0+/, '')}`;
+  const number = `FBB${serviceNumber.replace(/^0+/, "")}`;
   const res = await postAPI("/besapp/base/rest/busiservice/cz/v1/common/refreshAppToken", {
-    "loginId": number,
-    "servNumber": number
+    loginId: number,
+    servNumber: number
   });
   saveAuthHeaders(res);
   return res;
 }
+
 async function GetUserRoleCz() {
   return postAPI("/besapp/base/rest/busiservice/cz/v1/user/getUserRoleCz", null);
 }
+
 async function isLoggedIn() {
   try {
-    return JSON.parse(await GetUserRoleCz()).header.retCode === "0";
-  } catch (e) {
+    const roleRes = await GetUserRoleCz();
+    return JSON.parse(roleRes).header.retCode === "0";
+  } catch {
     return false;
   }
 }
@@ -542,31 +665,39 @@ async function GetBalance(acctId) {
   return postAPI("/besapp/base/rest/busiservice/cbs/ar/queryBalance", { acctId });
 }
 
-// Shared quota fetch (was: same GetUsage/GetBalance/normalize block in Main + switchToLandline).
+// Shared quota fetch used by Main + switchToLandline.
 async function fetchQuota(subscriberId, acctId) {
-  const usage_res = await GetUsage(subscriberId);
-  const usage = safeParse(usage_res, {});
-  rawUsageResponse.replaceChildren(Object.assign(document.createElement("pre"), { textContent: JSON.stringify(usage, null, 4) }));
-  usage?.body?.[0]?.freeUnitBeanDetailList?.forEach(bundle => {
-    bundle.usedAmount = bundle.initialAmount - bundle.currentAmount;
-    bundle.usagePercentage = ((bundle.usedAmount / bundle.initialAmount) * 100).toFixed();
-  });
-  consoleLog(usage);
-  const balance_res = await GetBalance(acctId);
-  const balance = safeParse(balance_res, {});
-  rawBalanceResponse.replaceChildren(Object.assign(document.createElement("pre"), { textContent: JSON.stringify(balance, null, 4) }));
-  consoleLog(balance);
+  const usageRes = await GetUsage(subscriberId);
+  const usage = safeParse(usageRes, {});
+  const usagePre = document.createElement("pre");
+  usagePre.textContent = JSON.stringify(usage, null, 4);
+  const usageBox = document.querySelector("#rawUsageResponse");
+  if (usageBox) {
+    usageBox.replaceChildren(usagePre);
+  }
+  for (const bundle of bundleListFrom(usage)) {
+    normalizeBundle(bundle);
+  }
+  const balanceRes = await GetBalance(acctId);
+  const balance = safeParse(balanceRes, {});
+  const balancePre = document.createElement("pre");
+  balancePre.textContent = JSON.stringify(balance, null, 4);
+  const balanceBox = document.querySelector("#rawBalanceResponse");
+  if (balanceBox) {
+    balanceBox.replaceChildren(balancePre);
+  }
   return { usage, balance };
 }
 
 async function getLatestAppVersionNumber() {
   try {
-    const res = await fetch(`${service_url}/besapp/base/rest/busiservice/cz/v1/cms/getCzAppVersionList`, {
+    const res = await fetch(`${SERVICE_URL}/besapp/base/rest/busiservice/cz/v1/cms/getCzAppVersionList`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: `{"versionType":"P","versionStatus":"R","appType":"Selfcare","osType":"google"}`
     });
-    return (await res.json()).body[0].versionNo;
+    const versionList = await res.json();
+    return versionList.body[0].versionNo;
   } catch (ex) {
     console.error(ex);
     return "1.0.0";
@@ -588,257 +719,368 @@ function prepare_xhr(xhr) {
     "Content-Type": "application/json",
     clienttype: "google",
     appversionno: appVersionNo
+  };
+  if (loginObj?.body?.token) {
+    headers.csrftoken = loginObj.body.token;
   }
-  if (loginObj?.body?.token)
-    headers.csrftoken = loginObj.body.token
-  const extra_headers = localStorage.getItem(`${serviceNumber}_headers`)
-  if (extra_headers !== null) {
-    const extra_headers_array = safeParse(extra_headers, [])
-    extra_headers_array.forEach(x => headers[x.key] = x.value)
-    if (headers.refresh_token)
-      headers.mrefresh_token = headers.refresh_token
+  const extraHeaders = localStorage.getItem(`${serviceNumber}_headers`);
+  if (extraHeaders !== null) {
+    for (const entry of safeParse(extraHeaders, [])) {
+      headers[entry.key] = entry.value;
+    }
+    if (headers.refresh_token) {
+      headers.mrefresh_token = headers.refresh_token;
+    }
   }
-  Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+  for (const [key, value] of Object.entries(headers)) {
+    xhr.setRequestHeader(key, value);
+  }
 }
 
 //#endregion
 
+//#region render main card + extra bundles
+
 function refreshOverAll() {
-  document.getElementById("overAll").style.display = "block";
-  sumInitial = 0;
-  sumUsed = 0;
-  usageObj.body[0].freeUnitBeanDetailList.forEach(x => {
-    sumInitial += x.initialAmount;
-    sumUsed += x.usedAmount
+  for (const node of $$(".auto-tip")) {
+    node.remove();
+  }
+  const overAll = $(":scope #overAll") ?? $("#overAll");
+  if (!overAll) {
+    return;
+  }
+  overAll.style.display = "block";
+  const list = bundleList();
+  let sumInitial = 0;
+  let sumUsed = 0;
+  for (const item of list) {
+    sumInitial += item.initialAmount;
+    sumUsed += item.usedAmount;
+  }
+  let sumPct = "0.00";
+  if (sumInitial !== 0) {
+    sumPct = ((sumUsed / sumInitial) * 100).toFixed(2);
+  }
+  setText(".freeUnitEnName_overAll", "Overall Quota");
+  ForDoms(".freeUnitEnName_overAll", (el) => {
+    el.style.display = "block";
   });
-  sumUsagePercentage = ((sumUsed / sumInitial) * 100).toFixed(2)
-
-  ForDoms(".freeUnitEnName_overAll", el => { el.style.display = "block"; });
-  ForDoms(".pbExtraWrapper_overAll", el => { el.style.display = "flow-root"; });
-
-  ForDoms(".initialTotalAmount_overAll", el => { el.innerText = sumInitial; });
-  ForDoms(".measureUnitEnName_overAll", el => { el.innerText = unitEnIds[main_bundle.measureUnit]; });
-  ForDoms(".usedAmount_overAll", el => { el.innerText = sumUsed.toFixed(2); });
-  ForDoms(".freeAmount_overAll", el => { el.innerText = (sumInitial - sumUsed).toFixed(2); });
-  ForDoms(".usagePercentage_overAll", el => { el.innerText = sumUsagePercentage; });
-
-  document.getElementById("progressbar_overAll").style.width = sumUsagePercentage + "%";
-  document.getElementById("progressbarValue_overAll").innerText = sumUsagePercentage + "%";
-  document.getElementById("progressbarValue_overAll").style.left = "calc(" + sumUsagePercentage + "% - 21px)";
-
-  usageObj.body[0].freeUnitBeanDetailList.forEach(x => {
-
-    dnewInfo = new Date(new Date(x.expireTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
-    doldInfo = new Date(new Date(x.effectiveTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
-    dnowInfo = new Date().getTime();
-    dpercentInfo = (dnowInfo - doldInfo) / (dnewInfo - doldInfo) * 100;
-
-    document.querySelector(".pbExtraWrapper_overAll > div").appendChild(Object.assign(document.createElement('span'),{
-      innerHTML: `${dpercentInfo.toFixed(2)}%`,
-      style: `left: calc(${dpercentInfo.toFixed(2)}% - 21px);`,
-      className: "tip auto-tip"
-    }));
-
-    document.querySelector(".pbExtraWrapper_overAll > div").appendChild(Object.assign(document.createElement('div'),{
-      innerHTML: `&nbsp;`,
-      className: "auto-tip",
-      style: `width: ${dpercentInfo.toFixed(2)}%; background-color: rgb(163 204 85 / 25%); position: absolute; transition: 0.5s; float: left; height: 3px; margin-top: 37px;`
-    }));
-
+  ForDoms(".pbExtraWrapper_overAll", (el) => {
+    el.style.display = "flow-root";
   });
+  setText(".initialTotalAmount_overAll", `${sumInitial}`);
+  setText(".measureUnitEnName_overAll", unitEnIds[main_bundle.measureUnit]);
+  setText(".usedAmount_overAll", sumUsed.toFixed(2));
+  setText(".freeAmount_overAll", (sumInitial - sumUsed).toFixed(2));
+  setText(".usagePercentage_overAll", sumPct);
+  setBar("#progressbar_overAll", "#progressbarValue_overAll", `${sumPct}%`);
+  const container = $(".pbExtraWrapper_overAll > div");
+  if (!container) {
+    return;
+  }
+  for (const item of list) {
+    const win = bundleWindow(item.effectiveTime, item.expireTime);
+    const pct = win.percent.toFixed(2);
+    const tip = document.createElement("span");
+    tip.textContent = `${pct}%`;
+    tip.className = "tip auto-tip";
+    tip.style.left = `calc(${pct}% - 21px)`;
+    container.append(tip);
+    const bar = document.createElement("div");
+    bar.className = "auto-tip";
+    bar.style.cssText = `width: ${pct}%; background-color: rgb(163 204 85 / 25%); position: absolute; transition: 0.5s; float: left; height: 3px; margin-top: 37px;`;
+    bar.textContent = "";
+    container.append(bar);
+  }
 }
 
-function createInfoFor(package, index) {
-  // DOM key may differ from API itemCode (duplicate main bundles); never mutate the API object.
-  let bundleKey = package.itemCode;
-  if (bundleKey === main_bundle_name && main_bundle?.offeringName !== package.offeringName)
-    bundleKey += "_" + package.offeringName.replace(/[^\w-]/g, "_");
-  if (
-    (package.itemCode === main_bundle_name && main_bundle?.offeringName === package.offeringName) ||
-    document.querySelector(`.freeUnitEnName_${bundleKey}_${index}`)
-  ) return;
+function bundleDomKey(bundle) {
+  if (bundle.itemCode === main_bundle_name && main_bundle?.offeringName !== bundle.offeringName) {
+    return `${bundle.itemCode}_${bundle.offeringName.replace(/[^\w-]/g, "_")}`;
+  }
+  return bundle.itemCode;
+}
 
+function createInfoFor(bundle, index) {
+  const bundleKey = bundleDomKey(bundle);
+  const isMainCard = bundle.itemCode === main_bundle_name && main_bundle?.offeringName === bundle.offeringName;
+  if (isMainCard) {
+    return;
+  }
+  if ($(`.freeUnitEnName_${CSS.escape(bundleKey)}_${index}`)) {
+    return;
+  }
   const suffix = `_${bundleKey}_${index}`;
-  const specimen = document.getElementById("infoSpecimen");
-  const nwInfo = specimen.cloneNode(true);
-  nwInfo.id = "div_" + bundleKey;
-  nwInfo.className = "transition";
-  nwInfo.style.display = "";
-  nwInfo.querySelectorAll("*").forEach(el => {
-    if (el.id && el.id.includes("{packageName}")) el.id = el.id.split("{packageName}").join(suffix);
-    el.classList.forEach(cls => {
-      if (cls.includes("{packageName}")) el.classList.replace(cls, cls.split("{packageName}").join(suffix));
-    });
+  const specimen = $("#infoSpecimen");
+  if (!specimen) {
+    return;
+  }
+  const card = specimen.cloneNode(true);
+  card.id = `div_${bundleKey}`;
+  card.className = "transition";
+  card.style.display = "";
+  for (const el of card.querySelectorAll("*")) {
+    if (el.id && el.id.includes("{packageName}")) {
+      el.id = el.id.split("{packageName}").join(suffix);
+    }
+    for (const cls of Array.from(el.classList)) {
+      if (cls.includes("{packageName}")) {
+        el.classList.replace(cls, cls.split("{packageName}").join(suffix));
+      }
+    }
+  }
+  specimen.before(card);
+  const escaped = CSS.escape(bundleKey);
+  for (const el of $$(`#div_${escaped}`)) {
+    el.style.cursor = "pointer";
+    el.setAttribute("itemCode", bundle.itemCode);
+    el.setAttribute("domKey", bundleKey);
+    el.setAttribute("index", `${index}`);
+    el.addEventListener("click", () => toggleMerge(el));
+  }
+  ForDoms(`.freeUnitEnName_${escaped}_${index}`, (el) => {
+    el.style.display = "block";
   });
-  specimen.parentNode.insertBefore(nwInfo, specimen);
-  const escapedCode = CSS.escape(bundleKey)
-  ForDoms("#div_" + escapedCode, el => { el.style.cursor = "pointer"; el.setAttribute("onclick", "toggleMerge(this)"); el.setAttribute("itemCode", package.itemCode); el.setAttribute("domKey", bundleKey); el.setAttribute("index", index); });
-
-  ForDoms(".freeUnitEnName_" + escapedCode + "_" + index, el => { el.style.display = "block"; });
-  ForDoms(".pbExtraWrapper_" + escapedCode + "_" + index, el => { el.style.display = "flow-root"; });
-
-  ForDoms(".freeUnitEnName_" + escapedCode + "_" + index, el => { el.innerText = package.offeringName || package.itemCode; });
-  ForDoms(".initialTotalAmount_" + escapedCode + "_" + index, el => { el.innerText = package.initialAmount; });
-  ForDoms(".measureUnitEnName_" + escapedCode + "_" + index, el => { el.innerText = unitEnIds[package.measureUnit]; });
-  ForDoms(".usedAmount_" + escapedCode + "_" + index, el => { el.innerText = package.usedAmount.toFixed(2); });
-  ForDoms(".usagePercentage_" + escapedCode + "_" + index, el => { el.innerText = package.usagePercentage; });
-  ForDoms(".freeAmount_" + escapedCode + "_" + index, el => { el.innerText = package.currentAmount; });
-  ForDoms(".remainingDaysForRenewal_" + escapedCode + "_" + index, el => {
-    el.innerText = package.remainingDaysForRenewal + "d " + msToTime(diffToDaysAhead(package.remainingDaysForRenewal + 1));
+  ForDoms(`.pbExtraWrapper_${escaped}_${index}`, (el) => {
+    el.style.display = "flow-root";
   });
-
-  document.getElementById("progressbar_" + escapedCode + "_" + index).style.width = package.usagePercentage + "%";
-  document.getElementById("progressbarValue_" + escapedCode + "_" + index).innerText = package.usagePercentage + "%";
-  document.getElementById("progressbarValue_" + escapedCode + "_" + index).style.left = "calc(" + package.usagePercentage + "% - 21px)";
-
-  dnewInfo = new Date(new Date(package.expireTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
-  doldInfo = new Date(new Date(package.effectiveTime).toLocaleString("en-CA", {day:"2-digit",month:"2-digit",year:"numeric"}) + " 0:0:0").getTime();
-  dnowInfo = new Date().getTime();
-  dpercentInfo = (dnowInfo - doldInfo) / (dnewInfo - doldInfo) * 100;
-
-  document.getElementById("progressbarDate_" + escapedCode + "_" + index).style.width = dpercentInfo + "%";
-  document.getElementById("progressbarDateValue_" + escapedCode + "_" + index).innerText = dpercentInfo.toFixed(2) + "%";
-  document.getElementById("progressbarDateValue_" + escapedCode + "_" + index).style.left = "calc(" + dpercentInfo.toFixed(2) + "% - 21px)";
-
-  if (package.currentAmount > 0)
-    LogUsage(package)
-  refreshOverAll()
+  setText(`.freeUnitEnName_${escaped}_${index}`, bundle.offeringName || bundle.itemCode);
+  setText(`.initialTotalAmount_${escaped}_${index}`, `${bundle.initialAmount}`);
+  setText(`.measureUnitEnName_${escaped}_${index}`, unitEnIds[bundle.measureUnit]);
+  setText(`.usedAmount_${escaped}_${index}`, bundle.usedAmount.toFixed(2));
+  setText(`.usagePercentage_${escaped}_${index}`, bundle.usagePercentage);
+  setText(`.freeAmount_${escaped}_${index}`, `${bundle.currentAmount}`);
+  setText(`.remainingDaysForRenewal_${escaped}_${index}`, `${bundle.remainingDaysForRenewal}d ${msToTime(diffToDaysAhead(bundle.remainingDaysForRenewal + 1))}`);
+  setBar(`#progressbar_${escaped}_${index}`, `#progressbarValue_${escaped}_${index}`, `${bundle.usagePercentage}%`);
+  const win = bundleWindow(bundle.effectiveTime, bundle.expireTime);
+  const dateBar = $(`#progressbarDate_${escaped}_${index}`);
+  if (dateBar) {
+    dateBar.style.width = `${win.percent.toFixed(2)}%`;
+  }
+  const dateTip = $(`#progressbarDateValue_${escaped}_${index}`);
+  if (dateTip) {
+    dateTip.textContent = `${win.percent.toFixed(2)}%`;
+    dateTip.style.left = `calc(${win.percent.toFixed(2)}% - 21px)`;
+  }
+  if (bundle.currentAmount > 0) {
+    LogUsage(bundle);
+  }
+  refreshOverAll();
 }
 
-function LogUsage(package, print){
-  const savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
+function LogUsage(bundle) {
+  const savedLogName = `usageHistory-${serviceNumber}-${bundle.itemCode}`;
   const history = loadHistory(savedLogName);
-
-  const isMaxHistory = history.length >= maxHistory && history.length > 0
-  const sameAmount = history.at(-1)?.key === package.usedAmount
-  if (!sameAmount) {
-    if (isMaxHistory) history.shift();
-    history.push({ key: package.usedAmount, value: dataDate.getTime() })
+  const last = history.at(-1);
+  if (last?.key !== bundle.usedAmount) {
+    if (history.length >= maxHistory) {
+      history.shift();
+    }
+    history.push({ key: bundle.usedAmount, value: dataDate.getTime() });
     saveHistory(savedLogName, history);
   }
+}
 
-  if (!print) return
-  PrintUsageHistory(package)
+function LogAndPrintUsage(bundle) {
+  LogUsage(bundle);
+  PrintUsageHistory(bundle);
 }
 
 function RefreshInfo() {
-
-  main_bundle = [...usageObj.body[0].freeUnitBeanDetailList].sort((x, y) => y.initialAmount - x.initialAmount).find(x => x.itemCode == main_bundle_name)
-
-  if (main_bundle == undefined) {
-    ForDoms(".freeUnitEnName", el => { el.innerHTML = "<h3>No Active Internet Bundle</h3>"; document.querySelector("#info").className = "nobundleView"; });
-    ForDoms("#balance", el => { el.innerText = "💰 " + (balanceObj == undefined ? "loading..." : (balanceObj.body.balanceInfo[0].totalAmount / 10000).toFixed(2)) + " EGP" });
+  const list = bundleList();
+  const sorted = [...list].sort((a, b) => b.initialAmount - a.initialAmount);
+  main_bundle = sorted.find((item) => item.itemCode === main_bundle_name);
+  if (main_bundle === undefined) {
+    const nameEl = $(".freeUnitEnName");
+    if (nameEl) {
+      nameEl.replaceChildren();
+      const heading = document.createElement("h3");
+      heading.textContent = "No Active Internet Bundle";
+      nameEl.append(heading);
+    }
+    const info = $("#info");
+    if (info) {
+      info.className = "nobundleView";
+    }
+    setText("#balance", `💰 ${balanceText()}`);
     return;
   }
-  // repopulating old api properties for easier migration
-  main_bundle.usedAmount = main_bundle.initialAmount - main_bundle.currentAmount
-  main_bundle.usagePercentage = ((main_bundle.usedAmount / main_bundle.initialAmount) * 100).toFixed()
-
-  dnew = new Date(new Date(main_bundle.expireTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
-  dold = new Date(new Date(main_bundle.effectiveTime).toLocaleString("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" }) + " 0:0:0").getTime();
-  dnow = new Date().getTime();
-  dpercent = (dnow - dold) / (dnew - dold) * 100;
-
-  remGB = main_bundle.currentAmount;
-  remDays = main_bundle.remainingDaysForRenewal + 1;
-  remDaysFrac = `${ remDays - 1 }d  ${msToTime(diffToDaysAhead(remDays))}`;
-  compAvgUsage = (remGB / ((dnew - new Date()) / (1000 * 60 * 60 * 24))).toFixed(2);
-  if ((dnew - new Date()) / (1000 * 60 * 60 * 24) < 1) compAvgUsage = remGB;
-  ForDoms(".compAvgUsage", el => { el.innerText = compAvgUsage; });
-
-  document.getElementById("progressbar").style.width = main_bundle.usagePercentage + "%";
-  document.getElementById("progressbarValue").innerText = main_bundle.usagePercentage + "%";
-  document.getElementById("progressbarValue").style.left = "calc(" + main_bundle.usagePercentage + "% - 21px)";
-  document.getElementById("progressbarDate").style.width = dpercent + "%";
-  document.getElementById("progressbarDateValue").innerText = dpercent.toFixed(2) + "%";
-  document.getElementById("progressbarDateValue").style.left = "calc(" + dpercent.toFixed(2) + "% - 21px)";
-  //document.getElementById("datePercentage").innerText = dpercent.toFixed(2);
-
-  usetimeperc = (((0.01 * dpercent) * main_bundle.initialAmount) - main_bundle.usedAmount).toFixed(2);
-
-  ForDoms(".freeUnitEnName", el => { el.innerText = main_bundle.offeringName; });
-  ForDoms(".freeAmount", el => { el.innerText = main_bundle.currentAmount; });
-  ForDoms(".usetimepercentage", el => { el.innerText = usetimeperc; if (usetimeperc < 0) el.style.color = "red"; else el.style.color = "lightgreen"; });
-  ForDoms(".measureUnitEnName", el => { el.innerText = unitEnIds[main_bundle.measureUnit]; });
-  ForDoms(".usedAmount", el => { el.innerText = main_bundle.usedAmount.toFixed(2); });
-  ForDoms(".initialTotalAmount", el => { el.innerText = main_bundle.initialAmount; });
-  ForDoms(".usagePercentage", el => { el.innerText = main_bundle.usagePercentage; });
-  ForDoms(".renewalDate", el => { el.innerText = new Date(dnew).getFullYear() + "-" + (new Date(dnew).getMonth() + 1) + "-" + new Date(dnew).getDate(); });
-  ForDoms(".subscriptionDate", el => { el.innerText = new Date(dold).getFullYear() + "-" + (new Date(dold).getMonth() + 1) + "-" + new Date(dold).getDate(); }); //C_TED_Primary_Fixed_Data.subscriptionDate;
-  ForDoms(".remainingDaysForRenewal", el => { el.innerText = remDaysFrac; });
-  ForDoms("#balance", el => { el.innerText = "💰 " + (balanceObj == undefined ? "loading..." : (balanceObj.body.balanceInfo[0].totalAmount / 10000).toFixed(2)) + " EGP" });
-
-  ForDoms(".freeUnitEnName1", el => { el.style.display = "none"; });
-  ForDoms(".pbExtraWrapper", el => { el.style.display = "none"; });
-
-  // add to existing localStorage usageHistory
-  if (typeof main_bundle != "undefined")
-    LogUsage(main_bundle, true)
-
-  if (usageObj.body[0].freeUnitBeanDetailList.length <= 1) return;
-
-  usageObj.body[0].freeUnitBeanDetailList
-  // filter out duplicate finished quotas
-  .filter(x=>{
-    if (x.currentAmount > 0) return true
-    let same_with_quota = usageObj.body[0].freeUnitBeanDetailList.filter(y => y.itemCode === x.itemCode && y.currentAmount > 0)
-    return same_with_quota.length === 0
-  }).forEach((x, index) => createInfoFor(x, index));
-}
-
-//#region history: PrintUsageHistory, shouldShowHistory, toggleShowHistory, clearHistory
-
-function PrintUsageHistory(package){
-  console.log(`Printing usage history for ${package.itemCode}`)
-  let savedLogName = `usageHistory-${serviceNumber}-${package.itemCode}`
-  document.querySelectorAll(".usageHistoryTable").forEach(child => child.parentNode.removeChild(child))
-  document.body.appendChild(Object.assign(document.createElement('table'),{
-    innerHTML:
-    `<tr><td colspan="3">
-    <a onclick="toggleShowHistory()" id="show_history_btn" style="float: left; cursor:pointer; user-select:none; margin-inline: 5px;"> ${shouldShowHistory() ? "[ - ]" : "[ + ]"} </a>
-    <a onclick="if (confirm('Clear History?')) { clearHistory('${savedLogName}') }" style="float: left; cursor:pointer; user-select:none; text-decoration: underline;">[clear]</a>
-    <span style="font-size: x-small;" onclick="switchToLandline()">${package.offeringName}</span>
-    </td></tr>`,
-    style: "position: absolute; top: 10px;",
-    className: "usageHistoryTable"
-  }));
-  if (!shouldShowHistory())
-    document.querySelector(".usageHistoryTable").classList.add("d-none")
-  const history = loadHistory(savedLogName);
-  let dimGB = `<span class="dim">GB</span>`
-  let printColoredSize = (size, prev) => `<span class="${size < 0 || size < prev ? "good-light-green" : "bad-red"}">${Math.abs(size).toFixed(2)} ${dimGB}</span>`;
-  for (let [index, usageDom] of history.entries()) {
-    let usageNumDom = "";
-    let prev_key = history?.[index - 1]?.key
-    if (index > 0) {
-      let usageNum = usageDom.key - prev_key;
-      usageNumDom = printColoredSize(usageNum);
+  normalizeBundle(main_bundle);
+  const win = bundleWindow(main_bundle.effectiveTime, main_bundle.expireTime);
+  dnew = win.end;
+  dold = win.start;
+  dpercent = win.percent;
+  const remainingDays = main_bundle.remainingDaysForRenewal + 1;
+  const remainingLabel = `${remainingDays - 1}d ${msToTime(diffToDaysAhead(remainingDays))}`;
+  const daysLeft = (dnew - Date.now()) / 86400000;
+  let safeRate = `${main_bundle.currentAmount}`;
+  if (daysLeft >= 1) {
+    safeRate = (main_bundle.currentAmount / daysLeft).toFixed(2);
+  }
+  setText(".compAvgUsage", safeRate);
+  setBar("#progressbar", "#progressbarValue", `${main_bundle.usagePercentage}%`);
+  const dateBar = $("#progressbarDate");
+  if (dateBar) {
+    dateBar.style.width = `${dpercent}%`;
+  }
+  const dateTip = $("#progressbarDateValue");
+  if (dateTip) {
+    dateTip.textContent = `${dpercent.toFixed(2)}%`;
+    dateTip.style.left = `calc(${dpercent.toFixed(2)}% - 21px)`;
+  }
+  const pace = (((0.01 * dpercent) * main_bundle.initialAmount) - main_bundle.usedAmount).toFixed(2);
+  setText(".freeUnitEnName", main_bundle.offeringName);
+  setText(".freeAmount", `${main_bundle.currentAmount}`);
+  setText(".usetimepercentage", pace);
+  ForDoms(".usetimepercentage", (el) => {
+    el.style.color = Number(pace) < 0 ? "red" : "lightgreen";
+  });
+  setText(".measureUnitEnName", unitEnIds[main_bundle.measureUnit]);
+  setText(".usedAmount", main_bundle.usedAmount.toFixed(2));
+  setText(".initialTotalAmount", `${main_bundle.initialAmount}`);
+  setText(".usagePercentage", main_bundle.usagePercentage);
+  setText(".renewalDate", formatYMD(dnew));
+  setText(".subscriptionDate", formatYMD(dold));
+  setText(".remainingDaysForRenewal", remainingLabel);
+  setText("#balance", `💰 ${balanceText()}`);
+  ForDoms(".freeUnitEnName1", (el) => {
+    el.style.display = "none";
+  });
+  ForDoms(".pbExtraWrapper", (el) => {
+    el.style.display = "none";
+  });
+  LogAndPrintUsage(main_bundle);
+  if (list.length <= 1) {
+    return;
+  }
+  const visible = list.filter((item) => {
+    if (item.currentAmount > 0) {
+      return true;
     }
-    document.querySelector(".usageHistoryTable tbody").appendChild(Object.assign(document.createElement('tr'),{
-      innerHTML: `<td>${printColoredSize(usageDom.key, prev_key)}</td><td>${formatedDate(new Date(usageDom.value))}</td><td>${usageNumDom}</td>`
-    }));
+    return !list.some((other) => other.itemCode === item.itemCode && other.currentAmount > 0);
+  });
+  let extraIndex = 0;
+  for (const item of visible) {
+    createInfoFor(item, extraIndex);
+    extraIndex += 1;
   }
 }
 
-function shouldShowHistory() { return (localStorage.getItem("show_history") ?? 'true') === 'true'; }
+//#endregion
+
+//#region history table
+
+function coloredSizeSpan(size, prev) {
+  const span = document.createElement("span");
+  let good = false;
+  if (size < 0) {
+    good = true;
+  } else if (prev !== undefined && size < prev) {
+    good = true;
+  }
+  span.className = good ? "good-light-green" : "bad-red";
+  span.textContent = `${Math.abs(size).toFixed(2)} `;
+  const dim = document.createElement("span");
+  dim.className = "dim";
+  dim.textContent = "GB";
+  span.append(dim);
+  return span;
+}
+
+function PrintUsageHistory(bundle) {
+  for (const node of $$(".usageHistoryTable")) {
+    node.remove();
+  }
+  const savedLogName = `usageHistory-${serviceNumber}-${bundle.itemCode}`;
+  const table = document.createElement("table");
+  table.className = "usageHistoryTable";
+  table.style.position = "absolute";
+  table.style.top = "10px";
+  const body = document.createElement("tbody");
+  const headRow = document.createElement("tr");
+  const headCell = document.createElement("td");
+  headCell.colSpan = 3;
+  const toggleBtn = document.createElement("a");
+  toggleBtn.id = "show_history_btn";
+  toggleBtn.textContent = shouldShowHistory() ? "[ - ]" : "[ + ]";
+  toggleBtn.style.cssText = "float: left; cursor:pointer; user-select:none; margin-inline: 5px;";
+  toggleBtn.addEventListener("click", toggleShowHistory);
+  const clearBtn = document.createElement("a");
+  clearBtn.textContent = "[clear]";
+  clearBtn.style.cssText = "float: left; cursor:pointer; user-select:none; text-decoration: underline;";
+  clearBtn.addEventListener("click", () => {
+    if (confirm("Clear History?")) {
+      clearHistory(savedLogName);
+    }
+  });
+  const name = document.createElement("span");
+  name.style.fontSize = "x-small";
+  name.textContent = bundle.offeringName;
+  name.addEventListener("click", switchToLandline);
+  headCell.append(toggleBtn, clearBtn, name);
+  headRow.append(headCell);
+  body.append(headRow);
+  table.append(body);
+  document.body.append(table);
+  if (!shouldShowHistory()) {
+    table.classList.add("d-none");
+  }
+  const history = loadHistory(savedLogName);
+  let rowIndex = 0;
+  for (const entry of history) {
+    const row = document.createElement("tr");
+    const usedCell = document.createElement("td");
+    const prevEntry = rowIndex === 0 ? undefined : history[rowIndex - 1];
+    usedCell.append(coloredSizeSpan(entry.key, prevEntry?.key));
+    const dateCell = document.createElement("td");
+    dateCell.textContent = formatedDate(new Date(entry.value));
+    const deltaCell = document.createElement("td");
+    if (rowIndex > 0) {
+      deltaCell.append(coloredSizeSpan(entry.key - history[rowIndex - 1].key, undefined));
+    }
+    row.append(usedCell, dateCell, deltaCell);
+    body.append(row);
+    rowIndex += 1;
+  }
+}
+
+function shouldShowHistory() {
+  return (localStorage.getItem("show_history") ?? "true") === "true";
+}
 
 function toggleShowHistory() {
-  if ((localStorage.getItem("show_history") ?? 'true') === 'true') {
-    localStorage.setItem("show_history", false)
-    document.querySelector(".usageHistoryTable").classList.add("d-none")
-    if (show_history_btn)
-      show_history_btn.innerHTML = "[ + ]"
+  const table = $(".usageHistoryTable");
+  const btn = $("#show_history_btn");
+  if (shouldShowHistory()) {
+    localStorage.setItem("show_history", "false");
+    if (table) {
+      table.classList.add("d-none");
+    }
+    if (btn) {
+      btn.textContent = "[ + ]";
+    }
   } else {
-    localStorage.setItem("show_history", true)
-    document.querySelector(".usageHistoryTable").classList.remove("d-none")
-    if (show_history_btn)
-      show_history_btn.innerHTML = "[ - ]"
+    localStorage.setItem("show_history", "true");
+    if (table) {
+      table.classList.remove("d-none");
+    }
+    if (btn) {
+      btn.textContent = "[ - ]";
+    }
   }
 }
 
 function clearHistory(savedLogName) {
   localStorage.removeItem(savedLogName);
-  document.querySelector(".usageHistoryTable tbody")?.replaceChildren(document.querySelector(".usageHistoryTable tbody")?.firstElementChild);
+  const body = $(".usageHistoryTable tbody");
+  if (!body) {
+    return;
+  }
+  const first = body.firstElementChild;
+  body.replaceChildren();
+  if (first) {
+    body.append(first);
+  }
 }
 
 //#endregion
@@ -851,95 +1093,132 @@ window.toggleShowHistory = toggleShowHistory;
 window.clearHistory = clearHistory;
 
 function toggleMerge(elm) {
-  if (!elm.classList.toggle("dim")) { RefreshInfo(); PrintUsageHistory(main_bundle); return; }
-
-  const itemcode = (elm.getAttribute("domKey") || elm.getAttribute("itemcode")) + "_" + elm.getAttribute("index");
-  PrintUsageHistory(usageObj.body[0].freeUnitBeanDetailList.find(x => x.itemCode == elm.getAttribute("itemcode")))
-  document.querySelector(".usedAmount").textContent = (parseFloat(document.querySelector(".usedAmount").textContent) + parseFloat(document.querySelector(".usedAmount_" + itemcode).textContent)).toFixed(2);
-  document.querySelector(".initialTotalAmount").textContent = parseFloat(document.querySelector(".initialTotalAmount").textContent) + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).textContent);
-  document.querySelector(".freeAmount").textContent = Number((parseFloat(document.querySelector(".freeAmount").textContent) + parseFloat(document.querySelector(".freeAmount_" + itemcode).textContent)).toFixed(2));
-  let mergedUsedAmount = parseFloat(main_bundle.usedAmount + parseFloat(document.querySelector(".usedAmount_" + itemcode).innerText));
-  let mergedFreeAmount = parseFloat(main_bundle.currentAmount + parseFloat(document.querySelector(".freeAmount_" + itemcode).innerText));
-  let mergedInitialTotalAmount = parseFloat(main_bundle.initialAmount + parseFloat(document.querySelector(".initialTotalAmount_" + itemcode).innerText));
-  let mergedUsagePercentage = Number((( mergedUsedAmount / mergedInitialTotalAmount ) * 100).toFixed(2));
-
-  document.querySelector(".compAvgUsage").innerText = (mergedFreeAmount / ((dnew-new Date())/(1000*60*60*24))).toFixed(2);
-  document.querySelector(".usetimepercentage").innerText = (((0.01 * dpercent) * mergedInitialTotalAmount) - mergedUsedAmount).toFixed(2);
-
-  document.querySelector("#progressbar").style.width = mergedUsagePercentage + "%";
-  document.querySelector("#progressbarValue").innerText = mergedUsagePercentage + "%";
-  document.querySelector("#progressbarValue").style.left = "calc(" + mergedUsagePercentage + "% - 21px)";
+  if (!elm.classList.toggle("dim")) {
+    RefreshInfo();
+    PrintUsageHistory(main_bundle);
+    return;
+  }
+  const key = `${elm.getAttribute("domKey") || elm.getAttribute("itemcode")}_${elm.getAttribute("index")}`;
+  const extra = bundleList().find((item) => item.itemCode === elm.getAttribute("itemcode"));
+  if (extra) {
+    PrintUsageHistory(extra);
+  }
+  const usedEl = $(".usedAmount");
+  const extraUsedEl = $(`.usedAmount_${CSS.escape(key)}`);
+  if (usedEl && extraUsedEl) {
+    usedEl.textContent = (parseFloat(usedEl.textContent) + parseFloat(extraUsedEl.textContent)).toFixed(2);
+  }
+  const totalEl = $(".initialTotalAmount");
+  const extraTotalEl = $(`.initialTotalAmount_${CSS.escape(key)}`);
+  if (totalEl && extraTotalEl) {
+    totalEl.textContent = `${parseFloat(totalEl.textContent) + parseFloat(extraTotalEl.textContent)}`;
+  }
+  const freeEl = $(".freeAmount");
+  const extraFreeEl = $(`.freeAmount_${CSS.escape(key)}`);
+  if (freeEl && extraFreeEl) {
+    freeEl.textContent = `${Number((parseFloat(freeEl.textContent) + parseFloat(extraFreeEl.textContent)).toFixed(2))}`;
+  }
+  const mergedUsedEl = $(`.usedAmount_${CSS.escape(key)}`);
+  const mergedFreeEl = $(`.freeAmount_${CSS.escape(key)}`);
+  const mergedTotalEl = $(`.initialTotalAmount_${CSS.escape(key)}`);
+  if (!mergedUsedEl || !mergedFreeEl || !mergedTotalEl) {
+    return;
+  }
+  const mergedUsed = main_bundle.usedAmount + parseFloat(mergedUsedEl.textContent);
+  const mergedFree = main_bundle.currentAmount + parseFloat(mergedFreeEl.textContent);
+  const mergedTotal = main_bundle.initialAmount + parseFloat(mergedTotalEl.textContent);
+  const mergedPct = Number(((mergedUsed / mergedTotal) * 100).toFixed(2));
+  setText(".compAvgUsage", (mergedFree / ((dnew - Date.now()) / 86400000)).toFixed(2));
+  setText(".usetimepercentage", (((0.01 * dpercent) * mergedTotal) - mergedUsed).toFixed(2));
+  setBar("#progressbar", "#progressbarValue", `${mergedPct}%`);
 }
 
 function drawDifferenceFromLastLoad() {
-  document.querySelectorAll(".drawedDiff").forEach(e=>e.parentNode.removeChild(e))
-  if (!usageObj?.body?.[0]?.freeUnitBeanDetailList) return;
-  const bundles_list = usageObj.body[0].freeUnitBeanDetailList.toSorted((a,b)=>b.effectiveTime - a.effectiveTime)
+  for (const node of $$(".drawedDiff")) {
+    node.remove();
+  }
+  const list = [...bundleList()].sort((a, b) => b.effectiveTime - a.effectiveTime);
+  if (list.length === 0) {
+    return;
+  }
   const prefix = `usageHistory-${serviceNumber}-`;
-  const snapshots = Object.keys(localStorage)
-    .filter(k => k.startsWith(prefix))
-    .map(k => {
-      let entries;
-      try { entries = JSON.parse(localStorage[k]); } catch (e) { return null; }
-      if (!Array.isArray(entries) || entries.length < 2) return null;
-      const bundle = bundles_list.find(z => z.itemCode === k.slice(prefix.length));
-      if (!bundle) return null;
-      return { bundle, prev: entries.at(-2) };
-    })
-    .filter(Boolean)
-  if (snapshots.length === 0) return;
-  const latest = Math.max(...snapshots.map(item => item.prev.value));
-  snapshots
-    .filter(item => item.prev.value === latest)
-    .forEach(item => {
-      const { bundle, prev } = item;
-      if (!bundle.usagePercentage) return;
-      const width = ((bundle.usedAmount - prev.key) / bundle.initialAmount) * 100;
-      const sister_dom = document.querySelector(bundle.itemCode === main_bundle_name ? `#progressbar` : `[id*="${CSS.escape(bundle.itemCode)}"] .progressbar`);
-      if (!sister_dom) return;
-      const style_width = (width / bundle.usagePercentage) * 100;
-      sister_dom.appendChild(Object.assign(document.createElement('div'), {
-        className: "progressbar drawedDiff",
-        style: `width: ${style_width > 100 ? 100 : style_width}%; background-color: rgb(220 30 255 / 56%); right: 0; display: inline;`,
-        innerHTML: "&nbsp;"
-      }));
-    })
+  const snapshots = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const storageKey = localStorage.key(i);
+    if (!storageKey || !storageKey.startsWith(prefix)) {
+      continue;
+    }
+    const entries = safeParse(localStorage.getItem(storageKey), null);
+    if (!Array.isArray(entries) || entries.length < 2) {
+      continue;
+    }
+    const bundle = list.find((item) => item.itemCode === storageKey.slice(prefix.length));
+    if (!bundle) {
+      continue;
+    }
+    snapshots.push({ bundle, prev: entries.at(-2) });
+  }
+  if (snapshots.length === 0) {
+    return;
+  }
+  const latest = Math.max(...snapshots.map((item) => item.prev.value));
+  for (const snapshot of snapshots.filter((item) => item.prev.value === latest)) {
+    const { bundle, prev } = snapshot;
+    if (!bundle.usagePercentage) {
+      continue;
+    }
+    const width = ((bundle.usedAmount - prev.key) / bundle.initialAmount) * 100;
+    let target = null;
+    if (bundle.itemCode === main_bundle_name) {
+      target = $("#progressbar");
+    } else {
+      target = $(`[id*="${CSS.escape(bundle.itemCode)}"] .progressbar`);
+    }
+    if (!target) {
+      continue;
+    }
+    const ratio = (width / Number(bundle.usagePercentage)) * 100;
+    const overlay = document.createElement("div");
+    overlay.className = "progressbar drawedDiff";
+    const capped = ratio > 100 ? 100 : ratio;
+    overlay.style.cssText = `width: ${capped}%; background-color: rgb(220 30 255 / 56%); right: 0; display: inline;`;
+    overlay.textContent = " ";
+    target.append(overlay);
+  }
 }
 
 async function Main() {
   dataDate = new Date();
-  lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
-  loginObj = safeParse(localStorage.getItem(`${serviceNumber}_loginObj`), undefined)
-  usageObj   = undefined
-  balanceObj = undefined
-  appVersionNo = await getLatestAppVersionNumber()
-
-  // single session check when already logged in (was: two full role checks)
-  if (!await isLoggedIn()) {
-    try { await RefreshAppToken(); } catch (e) { console.error(e); }
+  const stamp = $("#lastRefresh");
+  if (stamp) {
+    stamp.textContent = `✍️ ${formatedDate(dataDate)}`;
   }
-
-  if (!await isLoggedIn()) {
-    //#region Login
-    let login_res = await Login();
-    if (login_res.includes('"retCode":"0"')) {
-      localStorage.setItem(`${serviceNumber}_loginObj`, login_res)
-      loginObj = safeParse(login_res, undefined);
-      consoleLog(loginObj);
-    } else {
-      console.log("login_res", login_res);
-      error.innerHTML = "Error login!!";
-      console.log("Error loggining in! probably wrong credentials");
+  loginObj = safeParse(localStorage.getItem(`${serviceNumber}_loginObj`), undefined);
+  usageObj = undefined;
+  balanceObj = undefined;
+  appVersionNo = await getLatestAppVersionNumber();
+  if (!(await isLoggedIn())) {
+    try {
+      await RefreshAppToken();
+    } catch (ex) {
+      console.error(ex);
     }
-    //#endregion
   }
-
+  if (!(await isLoggedIn())) {
+    const loginRes = await Login();
+    if (loginRes.includes('"retCode":"0"')) {
+      localStorage.setItem(`${serviceNumber}_loginObj`, loginRes);
+      loginObj = safeParse(loginRes, undefined);
+    } else {
+      const errBox = $("#error");
+      if (errBox) {
+        errBox.textContent = "Error login!!";
+      }
+    }
+  }
   const quota = await fetchQuota(loginObj.body.subscriber.subscriberId, loginObj.body.account.acctId);
   usageObj = quota.usage;
   balanceObj = quota.balance;
-  
-
-
   RefreshInfo();
   drawDifferenceFromLastLoad();
 }
@@ -956,7 +1235,6 @@ async function querySubscribers(subscriberId) {
   return postAPI("/besapp/base/rest/busiservice/cz/v1/customer/querySubscribers", { subscriberId, pageSize: 10, startNum: 0 });
 }
 
-
 async function switchAccount(servNumber) {
   return postAPI("/besapp/base/rest/busiservice/v1/account/switchAccount", {
     subsId: loginObj.body.subscriber.subscriberId,
@@ -965,35 +1243,42 @@ async function switchAccount(servNumber) {
   });
 }
 
-
 async function switchToLandline() {
-  if (main_bundle_name === "C_FV_Normal_VoiceI") {
+  if (main_bundle_name === LANDLINE_CODE) {
     location.reload();
     return;
   }
-  main_bundle_name = "C_FV_Normal_VoiceI"
+  main_bundle_name = LANDLINE_CODE;
   dataDate = new Date();
-  lastRefresh.innerText = `✍️ ${formatedDate(dataDate)}`;
-  usageObj   = undefined
-  balanceObj = undefined
-
-  const associatedLines = await getAssociatedLines()
-  const associatedLinesObj = safeParse(associatedLines, {})
-  const subscriberId = associatedLinesObj.body.AssociatedNumbers.find(x => String(x.networkType) === '4').subscriberId
-
-
-  const subscribers = await querySubscribers(subscriberId)
-  const querySubscribersObj = safeParse(subscribers, {})
-  const subscriber = querySubscribersObj.body.subscriberList.find(x => x.subscriberId === subscriberId)
-  const acctId = subscriber.accountId
-  
-  const switchAccount_res = await switchAccount(subscriber.servNumber);
-  loginObj.body.token = safeParse(switchAccount_res, {}).body.token;
-
-  const landQuota = await fetchQuota(subscriberId, acctId);
+  const stamp = $("#lastRefresh");
+  if (stamp) {
+    stamp.textContent = `✍️ ${formatedDate(dataDate)}`;
+  }
+  usageObj = undefined;
+  balanceObj = undefined;
+  const associatedLines = await getAssociatedLines();
+  const associatedLinesObj = safeParse(associatedLines, {});
+  const subscriberId = associatedLinesObj.body.AssociatedNumbers.find((item) => String(item.networkType) === "4").subscriberId;
+  const subscribers = await querySubscribers(subscriberId);
+  const querySubscribersObj = safeParse(subscribers, {});
+  const subscriber = querySubscribersObj.body.subscriberList.find((item) => item.subscriberId === subscriberId);
+  const switchRes = await switchAccount(subscriber.servNumber);
+  loginObj.body.token = safeParse(switchRes, {}).body.token;
+  const landQuota = await fetchQuota(subscriberId, subscriber.accountId);
   usageObj = landQuota.usage;
   balanceObj = landQuota.balance;
-
+  // Drop internet package cards so only landline bundles render.
+  for (const node of $$('#info > div[id^="div_"]')) {
+    node.remove();
+  }
+  for (const node of $$(".auto-tip")) {
+    node.remove();
+  }
+  const overAll = $("#overAll");
+  if (overAll) {
+    overAll.style.display = "none";
+  }
+  $("#info")?.classList.remove("nobundleView");
   RefreshInfo();
   drawDifferenceFromLastLoad();
 }
