@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WEUI
-// @version      2026-09-29.1
+// @version      2026-09-29.2
 // @namespace    https://github.com/mostafaz4/WEUI/
 // @updateURL    https://raw.githubusercontent.com/mostafaz4/WEUI/master/WEUI.user.js
 // @description  Better WE.eg user interface
@@ -597,6 +597,7 @@ function prepare_xhr(xhr) {
 //#endregion
 
 function refreshOverAll() {
+  document.querySelectorAll(".auto-tip").forEach(el => el.remove());
   document.getElementById("overAll").style.display = "block";
   sumInitial = 0;
   sumUsed = 0;
@@ -986,6 +987,12 @@ async function switchToLandline() {
   const landQuota = await fetchQuota(subscriberId, acctId);
   usageObj = landQuota.usage;
   balanceObj = landQuota.balance;
+
+  // Drop internet package cards so only landline bundles render.
+  document.querySelectorAll('#info > div[id^="div_"]').forEach(el => el.remove());
+  document.querySelectorAll(".auto-tip").forEach(el => el.remove());
+  document.getElementById("overAll").style.display = "none";
+  document.querySelector("#info")?.classList.remove("nobundleView");
 
   RefreshInfo();
   drawDifferenceFromLastLoad();
